@@ -124,11 +124,12 @@ input[type="checkbox"]:not(:disabled) {
 }
 
 .side-item span {
-  width: 22px;
-  height: 22px;
-  display: inline-grid;
-  place-items: center;
-  border-radius: 4px;
+  width: 27px;
+  height: 27px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
   background: rgba(255,255,255,0.08);
   color: #bfe5ff;
 }
@@ -437,7 +438,17 @@ input[type="checkbox"]:not(:disabled) {
 }
 
 .kpi-strip article:last-child { border-right: 0; }
-.kpi-strip span { font-size: 20px; color: var(--blue); }
+.kpi-strip article > span {
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  color: var(--blue);
+  background: linear-gradient(135deg, #eff6ff, #dff8ff);
+  box-shadow: inset 0 0 0 1px rgba(64, 135, 220, 0.14);
+}
 .kpi-strip p { margin: 4px 0 2px; color: #64798e; font-size: 12px; }
 .kpi-strip strong { font-size: 24px; color: #183a63; }
 .kpi-strip small { display: block; color: #8a9aaa; }
@@ -1068,12 +1079,22 @@ input[type="checkbox"]:not(:disabled) {
   border-radius: 50%;
   background: rgba(31,122,224,.08);
 }
-.asset-stat-grid span { color: #1f7ae0; font-size: 24px; }
+.asset-stat-grid article > span {
+  width: 38px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 13px;
+  color: #1f7ae0;
+  background: linear-gradient(135deg, #f0f6ff, #e5fbff);
+  box-shadow: inset 0 0 0 1px rgba(40, 116, 210, 0.14);
+}
 .asset-stat-grid p { margin: 8px 0 2px; color: #6f8192; }
 .asset-stat-grid strong { font-size: 24px; color: #183a63; }
-.asset-stat-grid article[data-tone="red"] span { color: #e75252; }
-.asset-stat-grid article[data-tone="gold"] span { color: #f0a22e; }
-.asset-stat-grid article[data-tone="green"] span { color: #19b96c; }
+.asset-stat-grid article[data-tone="red"] > span { color: #e75252; background: #fff0f0; }
+.asset-stat-grid article[data-tone="gold"] > span { color: #f0a22e; background: #fff8e7; }
+.asset-stat-grid article[data-tone="green"] > span { color: #19b96c; background: #ecfff5; }
 
 .switch {
   min-width: 46px;
@@ -1109,7 +1130,17 @@ input[type="checkbox"]:not(:disabled) {
 .form-row.required label:first-child::before { content: "*"; color: #e75252; margin-right: 3px; }
 .form-row input { min-width: 280px; }
 .form-row .check { width: auto; display: flex; align-items: center; gap: 5px; color: #51697f; }
-.eye { height: 32px; border: 1px solid #cfdbe8; background: #fff; }
+.eye {
+  height: 32px;
+  width: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #cfdbe8;
+  background: #fff;
+  color: #4b6f94;
+}
+.eye:hover { color: var(--blue); border-color: #8dbdff; }
 .hint-bar {
   margin-left: 180px;
   color: #8795a6;
@@ -1511,6 +1542,12 @@ input[type="checkbox"]:not(:disabled) {
 }
 
 /* 子模块图标与交互逻辑增强：延续白底深蓝控制台，强化模块识别、选中态、钻取反馈与安全运营闭环。 */
+.app-icon {
+  display: block;
+  flex: 0 0 auto;
+  vector-effect: non-scaling-stroke;
+}
+
 .heading-icon,
 .nav-icon,
 .sub-icon {
@@ -1518,58 +1555,63 @@ input[type="checkbox"]:not(:disabled) {
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
-  font-weight: 800;
   letter-spacing: 0;
 }
 
 .heading-icon {
-  width: 34px;
-  height: 34px;
+  width: 36px;
+  height: 36px;
   margin-right: 10px;
-  border-radius: 10px;
+  border-radius: 12px;
   color: #fff;
   background: linear-gradient(135deg, #0b4dd8, #16b8d9);
-  box-shadow: 0 10px 24px rgba(16, 94, 220, 0.22);
-  font-size: 15px;
+  box-shadow: 0 10px 24px rgba(16, 94, 220, 0.24), inset 0 1px 0 rgba(255,255,255,0.22);
 }
 
 .nav-icon {
-  width: 24px;
-  height: 24px;
+  width: 27px;
+  height: 27px;
   margin-right: 9px;
-  border-radius: 8px;
+  border-radius: 9px;
   background: rgba(255, 255, 255, 0.08);
   color: #b9d8ff;
-  font-size: 12px;
-  transition: 0.18s ease;
+  transition: color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
 }
 
-.nav-item.active .nav-icon,
-.nav-item:hover .nav-icon {
+.side-item.active .nav-icon,
+.side-item:hover .nav-icon {
   background: #1e72ff;
   color: #fff;
   box-shadow: 0 8px 18px rgba(30, 114, 255, 0.32);
+  transform: translateX(1px);
 }
 
-.nav-item em {
+.side-item em {
   font-style: normal;
 }
 
 .sub-icon {
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   margin-right: 6px;
-  border-radius: 7px;
+  border-radius: 8px;
   color: #0b4dd8;
   background: #e9f2ff;
-  font-size: 11px;
+  box-shadow: inset 0 0 0 1px rgba(11, 77, 216, 0.08);
 }
 
 .tab-strip button.active .sub-icon,
 .pill.active .sub-icon,
-.type-filter button.active .sub-icon {
+.type-tags button.active .sub-icon {
   color: #fff;
   background: rgba(255, 255, 255, 0.22);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.24);
+}
+
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
 }
 
 .kpi-row article,
