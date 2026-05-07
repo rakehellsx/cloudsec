@@ -11,6 +11,22 @@ type TraceTab = '攻击过程' | '资产行为分析' | '资产关联关系' | '
 type AssetTab = 'region' | 'VPC' | '物理机' | '云主机' | '容器' | '漏洞管理' | '弱口令' | '两高一弱';
 type RuleTab = '规则配置' | '规则组配置' | '白名单';
 type WarningTab = '邮件通知' | '邮件列表' | '邮件服务器配置';
+type TopologyNodeType = 'VPC' | 'NAT网关' | '负载均衡' | '云WAF' | '云主机' | '物理机' | 'Region' | '攻击源';
+type TopologyNode = {
+  id: string;
+  name: string;
+  type: TopologyNodeType;
+  ip: string;
+  area: string;
+  risk: Severity;
+  status: string;
+  owner: string;
+  traffic: { sessions: number; inbound: string; outbound: string; peak: string; abnormal: string; protocols: string[] };
+  alerts: { id: string; name: string; level: Severity; status: AlertStatus; time: string }[];
+  sessions: { time: string; peer: string; protocol: string; action: string; bytes: string }[];
+  relations: string[];
+  suggestion: string;
+};
 
 const activePage = ref<PageKey>('overview');
 const activeTraceTab = ref<TraceTab>('攻击过程');
@@ -36,6 +52,7 @@ const assetKeyword = ref('');
 const ruleKeyword = ref('');
 const smtpTesting = ref(false);
 const mailEnabled = ref(true);
+const selectedTopologyNodeId = ref('ecs-prod-02');
 
 const navGroups = [
   {
@@ -170,6 +187,18 @@ const packetRows = [
   { no: 3, protocol: 'HTTP', src: '223.11.8.195', dst: '172.20.46.31', uri: '/api/v1/secrets', verdict: '未授权访问', size: '2.8KB' },
 ];
 
+const topologyNodes: TopologyNode[] = [
+  { id: 'vpc-bigdata', name: '大数据业务域 VPC', type: 'VPC', ip: '10.12.0.0/16', area: '云平台 / 北京数据中心', risk: '中危', status: '南北向流量偏高', owner: '数字化作业部', traffic: { sessions: 38216, inbound: '892 GB', outbound: '415 GB', peak: '3.8 Gbps', abnormal: '12.8%', protocols: ['HTTP', 'HTTPS', 'MySQL'] }, alerts: [{ id: 'AG-1001', name: '系统命令执行', level: '高危', status: '溯源中', time: '2025-11-31 16:01:01' }, { id: 'AG-1004', name: '违规外联', level: '中危', status: '可疑', time: '2025-11-31 15:42:19' }], sessions: [{ time: '16:01:01', peer: '192.168.123.112 → 192.168.123.113', protocol: 'HTTP', action: '放行后告警', bytes: '4.2KB' }, { time: '15:58:44', peer: '10.2.55.80 → 172.16.130.251', protocol: 'TCP', action: '扫描识别', bytes: '1.1KB' }], relations: ['NAT-GW-prod-01', 'LB-datamodel-01', 'CloudWAF-prod', '数据模型工具应用生产-ECS02'], suggestion: '建议核查该 VPC 的入方向安全组与东西向访问基线，确认异常会话是否来自已授权扫描器。' },
+  { id: 'nat-prod-01', name: 'NAT-GW-prod-01', type: 'NAT网关', ip: '39.110.116.43', area: '大数据业务域', risk: '中危', status: '外联会话突增', owner: '基础网络组', traffic: { sessions: 14892, inbound: '260 GB', outbound: '512 GB', peak: '1.6 Gbps', abnormal: '8.1%', protocols: ['HTTPS', 'DNS', 'NTP'] }, alerts: [{ id: 'AG-1005', name: '违规外联', level: '中危', status: '可疑', time: '2025-11-31 15:59:40' }], sessions: [{ time: '15:59:40', peer: '172.20.46.31 → 223.11.8.195', protocol: 'HTTPS', action: '外联命中', bytes: '2.8KB' }, { time: '15:50:22', peer: '172.16.130.251 → 8.8.8.8', protocol: 'DNS', action: '解析放行', bytes: '0.7KB' }], relations: ['大数据业务域 VPC', 'CloudWAF-prod', 'Internet 攻击源'], suggestion: '建议开启 NAT 网关外联白名单校验，对未知境外目的地址执行临时封禁并回溯近 24 小时会话。' },
+  { id: 'lb-datamodel-01', name: 'LB-datamodel-01', type: '负载均衡', ip: '172.16.130.10', area: '大数据业务域', risk: '低危', status: '连接数稳定', owner: '应用平台组', traffic: { sessions: 9850, inbound: '144 GB', outbound: '91 GB', peak: '760 Mbps', abnormal: '3.5%', protocols: ['HTTP', 'HTTPS'] }, alerts: [{ id: 'AG-1002', name: '注入攻击探测', level: '中危', status: '可疑', time: '2025-11-31 16:01:01' }], sessions: [{ time: '16:00:18', peer: '192.168.123.112 → 172.16.130.10', protocol: 'HTTPS', action: '转发至 WAF', bytes: '3.4KB' }, { time: '15:55:02', peer: '10.2.55.80 → 172.16.130.10', protocol: 'HTTP', action: '异常参数', bytes: '1.6KB' }], relations: ['CloudWAF-prod', '数据模型工具应用生产-ECS02'], suggestion: '建议检查监听器后端权重与异常 URI 分布，必要时将异常路径加入 WAF 精准拦截规则。' },
+  { id: 'waf-prod', name: 'CloudWAF-prod', type: '云WAF', ip: '172.16.130.20', area: '大数据业务域', risk: '高危', status: '高危规则连续命中', owner: '安全运营中心', traffic: { sessions: 12340, inbound: '188 GB', outbound: '76 GB', peak: '980 Mbps', abnormal: '18.6%', protocols: ['HTTP', 'HTTPS'] }, alerts: [{ id: 'AG-1001', name: '系统命令执行', level: '高危', status: '溯源中', time: '2025-11-31 16:01:01' }, { id: 'AG-1002', name: 'SQL 注入', level: '中危', status: '可疑', time: '2025-11-31 16:01:01' }], sessions: [{ time: '16:01:01', peer: '192.168.123.112 → 172.16.130.20', protocol: 'HTTP', action: '命令执行命中', bytes: '4.2KB' }, { time: '15:57:31', peer: '223.11.8.195 → 172.16.130.20', protocol: 'HTTPS', action: '未授权访问', bytes: '2.8KB' }], relations: ['LB-datamodel-01', '数据模型工具应用生产-ECS02', 'Internet 攻击源'], suggestion: '建议立即提升命令执行与未授权访问规则为阻断模式，并将攻击源沉淀为 IOC 情报。' },
+  { id: 'ecs-prod-02', name: '数据模型工具应用生产-ECS02', type: '云主机', ip: '192.168.123.113', area: '大数据业务域 / 生产子网', risk: '高危', status: '被攻击资产', owner: '数据模型工具', traffic: { sessions: 5621, inbound: '68 GB', outbound: '24 GB', peak: '420 Mbps', abnormal: '22.4%', protocols: ['HTTP', 'MySQL', 'SSH'] }, alerts: [{ id: 'AG-1001', name: '系统命令执行', level: '高危', status: '溯源中', time: '2025-11-31 16:01:01' }, { id: 'AG-1003', name: '端口扫描', level: '低危', status: '未成功', time: '2025-11-31 16:01:01' }], sessions: [{ time: '16:01:01', peer: '192.168.123.112:50166 → 192.168.123.113:58000', protocol: 'HTTP', action: '命令执行参数', bytes: '4.2KB' }, { time: '16:00:28', peer: '10.2.55.80:53269 → 192.168.123.113:22', protocol: 'SSH', action: '弱口令探测', bytes: '0.9KB' }], relations: ['CloudWAF-prod', 'LB-datamodel-01', '物理机池-A'], suggestion: '建议对该云主机执行快照留存、进程排查和安全组临时收敛，并在修复注入点后恢复访问。' },
+  { id: 'vpc-ops', name: '运维支撑 VPC', type: 'VPC', ip: '10.22.0.0/16', area: '云平台 / 天津数据中心', risk: '低危', status: '基线正常', owner: '智能运维平台', traffic: { sessions: 6800, inbound: '74 GB', outbound: '63 GB', peak: '510 Mbps', abnormal: '2.7%', protocols: ['HTTPS', 'SSH'] }, alerts: [{ id: 'AG-1003', name: '端口扫描', level: '低危', status: '未成功', time: '2025-11-31 16:01:01' }], sessions: [{ time: '15:49:12', peer: '10.2.55.80 → 172.16.130.251', protocol: 'TCP', action: '扫描识别', bytes: '1.1KB' }], relations: ['北京数据中心', '物理机池-A'], suggestion: '建议保持现有访问基线，持续观察低危扫描是否转化为横向移动。' },
+  { id: 'physical-a', name: 'd563xeh3u-23ry23', type: '物理机', ip: '物理机池-A', area: '云下 DMZ', risk: '中危', status: '横向访问偏高', owner: '基础设施组', traffic: { sessions: 4012, inbound: '48 GB', outbound: '39 GB', peak: '330 Mbps', abnormal: '9.4%', protocols: ['SSH', 'RDP', 'SMB'] }, alerts: [{ id: 'AG-1003', name: '端口扫描', level: '低危', status: '未成功', time: '2025-11-31 16:01:01' }], sessions: [{ time: '15:51:09', peer: '10.2.55.80 → d563xeh3u-23ry23', protocol: 'SMB', action: '横向探测', bytes: '1.9KB' }, { time: '15:46:44', peer: 'd563xeh3u-23ry23 → 192.168.123.113', protocol: 'SSH', action: '运维访问', bytes: '3.1KB' }], relations: ['大数据业务域 VPC', '运维支撑 VPC'], suggestion: '建议确认物理机运维账号登录来源，必要时开启双因子校验与横向访问限速。' },
+  { id: 'region-bj', name: '北京数据中心', type: 'Region', ip: 'Region-BJ', area: '华北区', risk: '中危', status: '多资产风险聚合', owner: '云资源管理组', traffic: { sessions: 71520, inbound: '1.4 TB', outbound: '890 GB', peak: '6.1 Gbps', abnormal: '10.2%', protocols: ['HTTP', 'HTTPS', 'TCP', 'UDP'] }, alerts: [{ id: 'AG-1001', name: '系统命令执行', level: '高危', status: '溯源中', time: '2025-11-31 16:01:01' }, { id: 'AG-1004', name: '注入攻击', level: '高危', status: '未成功', time: '2025-11-31 16:01:01' }], sessions: [{ time: '16:02:10', peer: 'Region-BJ 汇聚链路', protocol: 'TCP', action: '异常聚合', bytes: '32GB' }, { time: '15:48:08', peer: '跨 VPC 访问', protocol: 'HTTPS', action: '基线偏移', bytes: '18GB' }], relations: ['大数据业务域 VPC', '运维支撑 VPC', '物理机池-A'], suggestion: '建议从 Region 维度下钻高风险 VPC，优先处理高危告警密度最高的生产子网。' },
+  { id: 'attacker-cn', name: 'Internet 攻击源', type: '攻击源', ip: '192.168.123.112:50166', area: '江苏-南京', risk: '高危', status: '攻击活跃', owner: '外部未知', traffic: { sessions: 36, inbound: '0 GB', outbound: '4.8 MB', peak: '12 Mbps', abnormal: '100%', protocols: ['HTTP', 'TCP'] }, alerts: [{ id: 'AG-1001', name: '系统命令执行', level: '高危', status: '溯源中', time: '2025-11-31 16:01:01' }, { id: 'AG-1002', name: 'SQL 注入', level: '中危', status: '可疑', time: '2025-11-31 16:01:01' }], sessions: [{ time: '16:01:01', peer: '192.168.123.112 → 192.168.123.113', protocol: 'HTTP', action: '攻击请求', bytes: '4.2KB' }, { time: '15:56:21', peer: '192.168.123.112 → CloudWAF-prod', protocol: 'HTTP', action: '探测请求', bytes: '1.4KB' }], relations: ['CloudWAF-prod', '数据模型工具应用生产-ECS02'], suggestion: '建议将该源 IP 加入临时封禁策略、同步威胁情报，并触发近 7 天同源攻击检索。' },
+];
+
 const pageTitle = computed(() => pageMeta[activePage.value].title);
 const pageCrumb = computed(() => pageMeta[activePage.value].crumb);
 const pageDesc = computed(() => pageMeta[activePage.value].desc);
@@ -194,6 +223,7 @@ const filteredRules = computed(() => rules.value.filter((item) => {
   return !keyword || `${item.id} ${item.group} ${item.level} ${item.attackStatus} ${item.memo}`.toLowerCase().includes(keyword);
 }));
 const selectedRiskRows = computed(() => riskRows.filter((item) => riskDimension.value === '全部' || item.dim === riskDimension.value));
+const selectedTopologyNode = computed(() => topologyNodes.find((node) => node.id === selectedTopologyNodeId.value) || topologyNodes[0]);
 
 function showToast(text: string) {
   toastText.value = text;
@@ -237,6 +267,17 @@ function openAlert(id: string) {
   selectedAlertId.value = id;
   alertDrawerOpen.value = true;
   moreMenuId.value = '';
+}
+
+function drillTopologyNode(id: string) {
+  selectedTopologyNodeId.value = id;
+  const node = selectedTopologyNode.value;
+  showToast(`已钻取 ${node.name}：${node.alerts.length} 条告警，${node.traffic.sessions.toLocaleString()} 条会话`);
+}
+
+function topologyNodeClass(id: string) {
+  const node = topologyNodes.find((item) => item.id === id);
+  return ['topology-node', { active: selectedTopologyNodeId.value === id, high: node?.risk === '高危', medium: node?.risk === '中危' }];
 }
 
 function goTrace(id: string) {
@@ -421,7 +462,69 @@ function testSmtp() {
         <div class="tab-strip"><button v-for="tab in ['攻击过程','资产行为分析','资产关联关系','攻击者画像','流量包分析']" :key="tab" :class="{ active: activeTraceTab === tab }" @click="activeTraceTab = tab as TraceTab">{{ tab }}</button></div>
         <div v-if="activeTraceTab === '攻击过程'" class="trace-report panel"><h3>{{ selectedAlert.sourceIp.split(':')[0] }} 攻击事件报告</h3><div class="timeline"><article v-for="event in traceEvents" :key="event.title"><time>{{ event.time }}</time><div><h4>{{ event.title }}</h4><p>{{ event.content }}</p></div></article></div></div>
         <div v-else-if="activeTraceTab === '资产行为分析'" class="graph-card"><div class="zone cloud">云平台<div class="server-node">{{ selectedAlert.targetIp.split(':')[0] }}<small>{{ selectedAlert.targetAsset }}</small></div></div><div class="zone dmz">云下DMZ</div><div class="zone office">云下办公区</div><div class="zone internet">Internet <span>🇨🇦</span><span>🇨🇳</span><span>🇸🇪</span><span>🇯🇵</span><span>🇺🇸</span></div><svg class="graph-lines"><line x1="36%" y1="35%" x2="82%" y2="23%"/><line x1="36%" y1="35%" x2="82%" y2="42%"/><line x1="36%" y1="35%" x2="82%" y2="61%"/><line x1="36%" y1="35%" x2="22%" y2="75%"/></svg><div class="edge-label l1">目录遍历</div><div class="edge-label l2">SQL注入</div><div class="edge-label l3">端口扫描</div></div>
-        <div v-else-if="activeTraceTab === '资产关联关系'" class="relation-wrap"><aside class="asset-info"><h3>信息</h3><p>资产IP：{{ selectedAlert.targetIp.split(':')[0] }}</p><p>资产名称：{{ selectedAlert.targetAsset }}</p><p>业务应用：数据模型工具</p><p>VPC名称：大数据业务域</p><p>VPCID：sy234-eh343-ch34q3r43</p><p>region名称：北京数据中心</p></aside><div class="topology-canvas"><div class="vpc-box left"><b>VPC</b><span>NAT网关</span><span>负载均衡</span><span>云WAF</span><strong>{{ selectedAlert.targetAsset }}</strong></div><div class="vpc-box right"><b>VPC</b><span>NAT网关</span><span>负载均衡</span></div><div class="physical-box"><b>物理机</b><span>d563xeh3u-23ry23</span></div><div class="region-box"><b>region</b><span>北京数据中心</span></div><div class="attack-source">🇨🇳 {{ selectedAlert.sourceIp }}</div><div class="attack-line"></div></div></div>
+        <div v-else-if="activeTraceTab === '资产关联关系'" class="relation-wrap topology-drill-wrap">
+          <aside class="asset-info topology-summary">
+            <h3>信息</h3>
+            <p>资产IP：{{ selectedAlert.targetIp.split(':')[0] }}</p>
+            <p>资产名称：{{ selectedAlert.targetAsset }}</p>
+            <p>业务应用：数据模型工具</p>
+            <p>VPC名称：大数据业务域</p>
+            <p>VPCID：sy234-eh343-ch34q3r43</p>
+            <p>region名称：北京数据中心</p>
+            <div class="drill-hint">点击拓扑节点，可在右侧查看该节点的流量会话、告警命中与关联资产。</div>
+          </aside>
+          <div class="topology-canvas drill-canvas" aria-label="资产关联关系拓扑图">
+            <svg class="topology-links" viewBox="0 0 760 430" preserveAspectRatio="none">
+              <path d="M112 180 C230 130, 300 130, 384 175" />
+              <path d="M112 230 C238 260, 308 264, 384 221" />
+              <path d="M384 175 C470 130, 565 126, 652 166" />
+              <path d="M384 221 C480 252, 560 256, 660 230" />
+              <path d="M382 252 C450 310, 535 316, 632 328" />
+              <path class="danger-path" d="M700 82 C610 82, 525 118, 448 170" />
+            </svg>
+            <button :class="topologyNodeClass('vpc-bigdata')" class="vpc-main" @click="drillTopologyNode('vpc-bigdata')"><b>VPC</b><span>大数据业务域</span><em>12.8% 异常</em></button>
+            <button :class="topologyNodeClass('nat-prod-01')" class="nat-node" @click="drillTopologyNode('nat-prod-01')"><b>NAT网关</b><span>39.110.116.43</span></button>
+            <button :class="topologyNodeClass('lb-datamodel-01')" class="lb-node" @click="drillTopologyNode('lb-datamodel-01')"><b>负载均衡</b><span>LB-datamodel-01</span></button>
+            <button :class="topologyNodeClass('waf-prod')" class="waf-node" @click="drillTopologyNode('waf-prod')"><b>云WAF</b><span>高危命中 2</span></button>
+            <button :class="topologyNodeClass('ecs-prod-02')" class="ecs-node" @click="drillTopologyNode('ecs-prod-02')"><b>云主机</b><span>{{ selectedAlert.targetAsset }}</span><em>{{ selectedAlert.targetIp.split(':')[0] }}</em></button>
+            <button :class="topologyNodeClass('vpc-ops')" class="vpc-ops" @click="drillTopologyNode('vpc-ops')"><b>VPC</b><span>运维支撑域</span></button>
+            <button :class="topologyNodeClass('physical-a')" class="physical-node" @click="drillTopologyNode('physical-a')"><b>物理机</b><span>d563xeh3u-23ry23</span></button>
+            <button :class="topologyNodeClass('region-bj')" class="region-node" @click="drillTopologyNode('region-bj')"><b>region</b><span>北京数据中心</span></button>
+            <button :class="topologyNodeClass('attacker-cn')" class="attacker-node" @click="drillTopologyNode('attacker-cn')"><b>🇨🇳 攻击源</b><span>{{ selectedAlert.sourceIp }}</span></button>
+          </div>
+          <aside class="node-detail-panel">
+            <div class="node-detail-head">
+              <div>
+                <p>{{ selectedTopologyNode.type }}</p>
+                <h3>{{ selectedTopologyNode.name }}</h3>
+                <span>{{ selectedTopologyNode.ip }} · {{ selectedTopologyNode.area }}</span>
+              </div>
+              <span :class="levelClass(selectedTopologyNode.risk)">{{ selectedTopologyNode.risk }}</span>
+            </div>
+            <div class="node-status-line"><b>{{ selectedTopologyNode.status }}</b><span>负责人：{{ selectedTopologyNode.owner }}</span></div>
+            <div class="traffic-metrics">
+              <article><span>会话数</span><strong>{{ selectedTopologyNode.traffic.sessions.toLocaleString() }}</strong></article>
+              <article><span>入流量</span><strong>{{ selectedTopologyNode.traffic.inbound }}</strong></article>
+              <article><span>出流量</span><strong>{{ selectedTopologyNode.traffic.outbound }}</strong></article>
+              <article><span>峰值带宽</span><strong>{{ selectedTopologyNode.traffic.peak }}</strong></article>
+            </div>
+            <div class="protocol-tags"><span>异常占比 {{ selectedTopologyNode.traffic.abnormal }}</span><em v-for="protocol in selectedTopologyNode.traffic.protocols" :key="protocol">{{ protocol }}</em></div>
+            <section class="drill-section">
+              <h4>最近流量会话</h4>
+              <div v-for="session in selectedTopologyNode.sessions" :key="`${session.time}-${session.peer}`" class="session-row"><time>{{ session.time }}</time><div><b>{{ session.protocol }}</b><span>{{ session.peer }}</span></div><em>{{ session.action }} / {{ session.bytes }}</em></div>
+            </section>
+            <section class="drill-section">
+              <h4>告警命中</h4>
+              <div v-for="alert in selectedTopologyNode.alerts" :key="alert.id" class="node-alert-row"><button @click="openAlert(alert.id)">{{ alert.id }}</button><span>{{ alert.name }}</span><i :class="levelClass(alert.level)">{{ alert.level }}</i><em>{{ alert.status }}</em></div>
+            </section>
+            <section class="drill-section">
+              <h4>关联资产</h4>
+              <div class="relation-tags"><span v-for="relation in selectedTopologyNode.relations" :key="relation">{{ relation }}</span></div>
+            </section>
+            <div class="suggestion-box">{{ selectedTopologyNode.suggestion }}</div>
+            <div class="detail-actions"><button class="blue-button" @click="setPage('alerts')">查看告警</button><button class="white-button" @click="goTrace(selectedTopologyNode.alerts[0]?.id || selectedAlert.id)">生成溯源</button><button class="red-button" @click="showToast(`${selectedTopologyNode.name} 已加入临时阻断策略`)" >临时阻断</button></div>
+          </aside>
+        </div>
         <div v-else-if="activeTraceTab === '攻击者画像'" class="attacker-profile panel"><div class="avatar-risk">高</div><div><h3>攻击者画像</h3><p>来源地：{{ selectedAlert.sourceGeo }}；历史命中 36 次；常用技术：SQL 注入、系统命令执行、端口扫描；可能工具：自动化扫描器、脚本化 WebShell 投递。</p><div class="tag-cloud"><span>MacOS X</span><span>Windows OS</span><span>未使用跳板主机</span><span>高可信 IOC</span></div></div></div>
         <div v-else class="table-card"><table class="data-table"><thead><tr><th>序号</th><th>协议</th><th>源IP</th><th>目的IP</th><th>URI/特征</th><th>判定</th><th>包大小</th></tr></thead><tbody><tr v-for="row in packetRows" :key="row.no"><td>{{ row.no }}</td><td>{{ row.protocol }}</td><td>{{ row.src }}</td><td>{{ row.dst }}</td><td>{{ row.uri }}</td><td><span class="tag danger">{{ row.verdict }}</span></td><td>{{ row.size }}</td></tr></tbody></table></div>
       </section>
