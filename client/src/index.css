@@ -1509,3 +1509,251 @@ input[type="checkbox"]:not(:disabled) {
   .topology-links { display: none; }
   .drill-canvas { display: grid; align-content: start; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* 子模块图标与交互逻辑增强：延续白底深蓝控制台，强化模块识别、选中态、钻取反馈与安全运营闭环。 */
+.heading-icon,
+.nav-icon,
+.sub-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.heading-icon {
+  width: 34px;
+  height: 34px;
+  margin-right: 10px;
+  border-radius: 10px;
+  color: #fff;
+  background: linear-gradient(135deg, #0b4dd8, #16b8d9);
+  box-shadow: 0 10px 24px rgba(16, 94, 220, 0.22);
+  font-size: 15px;
+}
+
+.nav-icon {
+  width: 24px;
+  height: 24px;
+  margin-right: 9px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #b9d8ff;
+  font-size: 12px;
+  transition: 0.18s ease;
+}
+
+.nav-item.active .nav-icon,
+.nav-item:hover .nav-icon {
+  background: #1e72ff;
+  color: #fff;
+  box-shadow: 0 8px 18px rgba(30, 114, 255, 0.32);
+}
+
+.nav-item em {
+  font-style: normal;
+}
+
+.sub-icon {
+  width: 20px;
+  height: 20px;
+  margin-right: 6px;
+  border-radius: 7px;
+  color: #0b4dd8;
+  background: #e9f2ff;
+  font-size: 11px;
+}
+
+.tab-strip button.active .sub-icon,
+.pill.active .sub-icon,
+.type-filter button.active .sub-icon {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.kpi-row article,
+.risk-card,
+.map-click-node,
+.clickable-tags button {
+  cursor: pointer;
+  transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease, background 0.16s ease;
+}
+
+.kpi-row article:hover,
+.risk-card:hover,
+.map-click-node:hover,
+.clickable-tags button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 30px rgba(12, 38, 78, 0.10);
+  border-color: #8dbdff;
+}
+
+.map-click-node {
+  border: 1px solid #d8e5f6;
+  text-align: left;
+}
+
+.clickable-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.clickable-tags button {
+  border: 1px solid #d7e5f5;
+  background: #f7fbff;
+  color: #244266;
+  border-radius: 999px;
+  padding: 7px 12px;
+  font-size: 12px;
+}
+
+.risk-insight {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+}
+
+.risk-insight strong {
+  color: #12233f;
+}
+
+.risk-insight span {
+  color: #62748e;
+  font-size: 13px;
+  flex: 1;
+}
+
+.risk-card.active {
+  border-color: #1e72ff;
+  background: linear-gradient(180deg, #ffffff, #f3f8ff);
+  box-shadow: inset 4px 0 0 #1e72ff, 0 14px 28px rgba(30, 114, 255, 0.13);
+}
+
+.asset-drawer dl {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  gap: 10px 14px;
+  margin: 18px 0;
+  padding: 14px;
+  border-radius: 14px;
+  background: #f7faff;
+  border: 1px solid #e0ebfa;
+}
+
+.asset-drawer dt {
+  color: #6b7890;
+  font-size: 12px;
+}
+
+.asset-drawer dd {
+  margin: 0;
+  color: #17253d;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.drawer-actions,
+.modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+.modal-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(8, 24, 52, 0.36);
+  backdrop-filter: blur(4px);
+}
+
+.modal {
+  width: min(560px, calc(100vw - 40px));
+  border-radius: 18px;
+  background: #fff;
+  border: 1px solid #dfe8f5;
+  box-shadow: 0 28px 70px rgba(9, 28, 66, 0.24);
+  padding: 24px;
+  position: relative;
+}
+
+.modal h3 {
+  margin: 0 0 14px;
+  color: #14233d;
+}
+
+.modal p {
+  color: #52627a;
+  line-height: 1.7;
+}
+
+.rule-modal label {
+  display: grid;
+  gap: 7px;
+  margin: 12px 0;
+  color: #465873;
+  font-size: 13px;
+}
+
+.rule-modal input,
+.rule-modal select,
+.rule-modal textarea {
+  border: 1px solid #d9e4f2;
+  border-radius: 10px;
+  padding: 10px 12px;
+  outline: none;
+  background: #fbfdff;
+}
+
+.rule-modal textarea {
+  min-height: 82px;
+  resize: vertical;
+}
+
+.hint-bar {
+  border-radius: 12px;
+  border: 1px solid #cfe1ff;
+  background: #f0f6ff;
+  color: #1d5cc6;
+  padding: 10px 12px;
+  font-size: 12px;
+}
+
+.confirm-modal {
+  width: min(430px, calc(100vw - 40px));
+}
+
+.red-button {
+  border: none;
+  border-radius: 10px;
+  background: #e24b4b;
+  color: #fff;
+  padding: 9px 14px;
+  font-weight: 700;
+}
+
+.tag.warning {
+  background: #fff7e5;
+  color: #b46b00;
+}
+
+.tag.danger {
+  background: #fff0f0;
+  color: #d73434;
+}
+
+@media (max-width: 980px) {
+  .risk-insight {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

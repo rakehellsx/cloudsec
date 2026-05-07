@@ -11,6 +11,7 @@ type TraceTab = '攻击过程' | '资产行为分析' | '资产关联关系' | '
 type AssetTab = 'region' | 'VPC' | '物理机' | '云主机' | '容器' | '漏洞管理' | '弱口令' | '两高一弱';
 type RuleTab = '规则配置' | '规则组配置' | '白名单';
 type WarningTab = '邮件通知' | '邮件列表' | '邮件服务器配置';
+type IconKey = PageKey | TraceTab | AssetTab | RuleTab | WarningTab | '外部攻击' | '横向移动' | '全部' | 'SQL注入' | '端口扫描' | '暴力破解' | '违规外联' | '未授权访问' | '信息泄露';
 type TopologyNodeType = 'VPC' | 'NAT网关' | '负载均衡' | '云WAF' | '云主机' | '物理机' | 'Region' | '攻击源';
 type TopologyNode = {
   id: string;
@@ -53,30 +54,45 @@ const ruleKeyword = ref('');
 const smtpTesting = ref(false);
 const mailEnabled = ref(true);
 const selectedTopologyNodeId = ref('ecs-prod-02');
+const selectedRiskObject = ref('');
+const selectedAssetId = ref('');
+const ruleDialogOpen = ref(false);
+const ruleDialogMode = ref('新增自定义规则');
+const confirmAction = ref<{ title: string; content: string; onConfirm: () => void } | null>(null);
+const trafficFocus = ref('互联网攻击');
+const intelligenceQuery = ref('');
 
 const navGroups = [
   {
     title: '安全态势',
-    items: [{ key: 'overview' as PageKey, label: '态势概览', icon: '▧' }],
+    items: [{ key: 'overview' as PageKey, label: '态势概览', icon: '态' }],
   },
   {
     title: '威胁分析',
     items: [
-      { key: 'alerts' as PageKey, label: '实时告警', icon: '!' },
-      { key: 'intelligence' as PageKey, label: '威胁情报', icon: '◎' },
-      { key: 'risk' as PageKey, label: '风险定位', icon: '⌖' },
-      { key: 'trace' as PageKey, label: '溯源分析', icon: '↯' },
+      { key: 'alerts' as PageKey, label: '实时告警', icon: '警' },
+      { key: 'intelligence' as PageKey, label: '威胁情报', icon: '情' },
+      { key: 'risk' as PageKey, label: '风险定位', icon: '险' },
+      { key: 'trace' as PageKey, label: '溯源分析', icon: '溯' },
     ],
   },
   {
     title: '资源与规则',
     items: [
-      { key: 'assets' as PageKey, label: '云资产管理', icon: '◫' },
-      { key: 'rules' as PageKey, label: '业务规则', icon: '☷' },
-      { key: 'warning' as PageKey, label: '威胁预警', icon: '✉' },
+      { key: 'assets' as PageKey, label: '云资产管理', icon: '资' },
+      { key: 'rules' as PageKey, label: '业务规则', icon: '规' },
+      { key: 'warning' as PageKey, label: '威胁预警', icon: '邮' },
     ],
   },
 ];
+
+const moduleIcons: Record<string, string> = {
+  overview: '态', alerts: '警', intelligence: '情', trace: '溯', risk: '险', assets: '资', rules: '规', warning: '邮',
+  攻击过程: '链', 资产行为分析: '行', 资产关联关系: '拓', 攻击者画像: '像', 流量包分析: '包',
+  region: '区', VPC: '云', 物理机: '物', 云主机: '主', 容器: '容', 漏洞管理: '漏', 弱口令: '弱', 两高一弱: '基',
+  规则配置: '配', 规则组配置: '组', 白名单: '白', 邮件通知: '通', 邮件列表: '列', 邮件服务器配置: '服',
+  全部: '全', 外部攻击: '外', 横向移动: '横', SQL注入: '注', 端口扫描: '扫', 暴力破解: '破', 违规外联: '联', 未授权访问: '未', 信息泄露: '泄',
+};
 
 const pageMeta: Record<PageKey, { title: string; crumb: string; desc: string }> = {
   overview: { title: '态势概览', crumb: '我的位置 / 态势概览', desc: '云内流量安全态势监测与攻击趋势研判' },
@@ -212,7 +228,12 @@ const filteredAlerts = computed(() => alerts.value.filter((item) => {
   const matchKeyword = !keyword || `${item.sourceIp} ${item.targetIp} ${item.targetAsset} ${item.detail} ${item.attackType}`.toLowerCase().includes(keyword);
   return matchScenario && matchType && matchLevel && matchStatus && matchKeyword;
 }));
-const filteredIntelligence = computed(() => intelligence.value.filter((item) => !onlyHit.value || item.hit));
+const filteredIntelligence = computed(() => intelligence.value.filter((item) => {
+  const keyword = intelligenceQuery.value.trim().toLowerCase();
+  const matchHit = !onlyHit.value || item.hit;
+  const matchKeyword = !keyword || `${item.content} ${item.affected} ${item.type} ${item.source}`.toLowerCase().includes(keyword);
+  return matchHit && matchKeyword;
+}));
 const filteredAssets = computed(() => assetRows.filter((item) => {
   const tabMatch = activeAssetTab.value === 'VPC' ? item.type === 'VPC' : activeAssetTab.value === item.type || ['漏洞管理', '弱口令', '两高一弱', 'region'].includes(activeAssetTab.value);
   const keyword = assetKeyword.value.trim().toLowerCase();
@@ -223,7 +244,11 @@ const filteredRules = computed(() => rules.value.filter((item) => {
   return !keyword || `${item.id} ${item.group} ${item.level} ${item.attackStatus} ${item.memo}`.toLowerCase().includes(keyword);
 }));
 const selectedRiskRows = computed(() => riskRows.filter((item) => riskDimension.value === '全部' || item.dim === riskDimension.value));
+const selectedRiskRow = computed(() => selectedRiskRows.value.find((item) => item.object === selectedRiskObject.value) || selectedRiskRows.value[0] || riskRows[0]);
 const selectedTopologyNode = computed(() => topologyNodes.find((node) => node.id === selectedTopologyNodeId.value) || topologyNodes[0]);
+const selectedAsset = computed(() => assetRows.find((item) => item.id === selectedAssetId.value));
+const pageTitleIcon = computed(() => moduleIcons[activePage.value]);
+const allAlertSelected = computed(() => filteredAlerts.value.length > 0 && filteredAlerts.value.every((item) => selectedRows.value.includes(item.id)));
 
 function showToast(text: string) {
   toastText.value = text;
@@ -232,10 +257,30 @@ function showToast(text: string) {
   }, 2400);
 }
 
+function iconFor(key: IconKey | string) {
+  return moduleIcons[key] || '项';
+}
+
 function setPage(page: PageKey) {
   activePage.value = page;
   alertDrawerOpen.value = false;
   moreMenuId.value = '';
+  if (page !== 'assets') selectedAssetId.value = '';
+  showToast(`已切换到${pageMeta[page].title}模块`);
+}
+
+function refreshPage() {
+  const actionMap: Record<PageKey, string> = {
+    overview: '已刷新态势指标、攻击趋势与实时告警监测数据',
+    alerts: '已刷新告警队列并重新计算当前筛选结果',
+    intelligence: '已同步威胁情报命中状态',
+    trace: '已刷新当前告警的溯源证据链',
+    risk: '已重新计算风险定位维度与风险分',
+    assets: '已同步云资产清单与风险关联关系',
+    rules: '已刷新业务规则命中统计',
+    warning: '已刷新威胁预警配置状态',
+  };
+  showToast(actionMap[activePage.value]);
 }
 
 function sparkline(points: number[], width = 300, height = 120) {
@@ -261,6 +306,36 @@ function statusClass(status: AlertStatus) {
 
 function toggleRow(id: string) {
   selectedRows.value = selectedRows.value.includes(id) ? selectedRows.value.filter((row) => row !== id) : [...selectedRows.value, id];
+}
+
+function toggleAllAlerts() {
+  const currentIds = filteredAlerts.value.map((item) => item.id);
+  selectedRows.value = allAlertSelected.value ? selectedRows.value.filter((id) => !currentIds.includes(id)) : Array.from(new Set([...selectedRows.value, ...currentIds]));
+  showToast(allAlertSelected.value ? '已取消当前筛选结果的全选状态' : `已选择当前筛选结果中的 ${currentIds.length} 条告警`);
+}
+
+function applyScenario(scene: string) {
+  selectedScenario.value = scene;
+  if (scene !== '全部') showToast(`已按威胁场景“${scene}”过滤告警`);
+}
+
+function focusAttackType(type: string) {
+  selectedType.value = selectedType.value === type ? '全部类型' : type;
+  setPage('alerts');
+  showToast(`已联动到实时告警并筛选攻击类型：${selectedType.value}`);
+}
+
+function openMapEndpoint(kind: 'source' | 'target') {
+  if (kind === 'source') {
+    alertKeyword.value = selectedAlert.value.sourceIp.split(':')[0];
+    setPage('alerts');
+    showToast('已按地图攻击源 IP 联动筛选告警');
+  } else {
+    activeTraceTab.value = '资产关联关系';
+    setPage('trace');
+    selectedTopologyNodeId.value = 'ecs-prod-02';
+    showToast('已进入目的资产拓扑钻取视图');
+  }
 }
 
 function openAlert(id: string) {
@@ -303,14 +378,19 @@ function addIntelligence() {
 
 function handleAlertAction(id: string, action: string) {
   selectedAlertId.value = id;
-  if (action === '标记已处理') {
+  if (action === '标记已处理' || action === '标记误报' || action === '加白') {
     alerts.value = alerts.value.map((item) => item.id === id ? { ...item, status: '已处理' as AlertStatus } : item);
   }
   if (action === '封禁' || action === '阻断隔离') {
     alerts.value = alerts.value.map((item) => item.id === id ? { ...item, status: '已阻断' as AlertStatus } : item);
   }
+  if (action === '加资产') {
+    selectedAssetId.value = assetRows.find((asset) => selectedAlert.value.targetAsset.includes(asset.name) || selectedAlert.value.targetIp.includes(asset.cidr))?.id || 'ecs-0002';
+    activeAssetTab.value = '云主机';
+    setPage('assets');
+  }
   moreMenuId.value = '';
-  showToast(`告警 ${id} 已执行：${action}`);
+  showToast(`告警 ${id} 已执行：${action}，处置记录已写入审计链路`);
 }
 
 function batchProcess() {
@@ -326,7 +406,91 @@ function resetAlertFilter() {
   selectedLevel.value = '全部等级';
   selectedStatus.value = '全部状态';
   alertKeyword.value = '';
-  showToast('已重置实时告警筛选条件');
+  selectedRows.value = [];
+  showToast('已重置实时告警筛选条件与批量选择');
+}
+
+function viewIntelligence(item: typeof intelligence.value[number]) {
+  intelligenceQuery.value = item.content;
+  alertKeyword.value = item.content.split('\n')[0];
+  showToast(`已定位情报 ${item.id}，可继续查看关联告警命中`);
+}
+
+function linkIntelligenceAlerts(item: typeof intelligence.value[number]) {
+  alertKeyword.value = item.content.split('\n')[0];
+  selectedType.value = '全部类型';
+  setPage('alerts');
+  showToast(`已按 IOC ${item.content} 联动查询告警`);
+}
+
+function toggleIntelligence(index: number) {
+  const item = filteredIntelligence.value[index];
+  const realIndex = intelligence.value.findIndex((row) => row.id === item.id);
+  if (realIndex >= 0) intelligence.value[realIndex].effect = intelligence.value[realIndex].effect === '有效' ? '失效' : '有效';
+  showToast(`${item.id} 已${intelligence.value[realIndex].effect === '有效' ? '启用' : '停用'}`);
+}
+
+function deleteIntelligence(index: number) {
+  const item = filteredIntelligence.value[index];
+  confirmAction.value = { title: '删除威胁情报', content: `确认删除 ${item.content}？删除后不会影响已沉淀的告警处置记录。`, onConfirm: () => {
+    intelligence.value = intelligence.value.filter((row) => row.id !== item.id);
+    showToast(`已删除情报 ${item.id}`);
+  }};
+}
+
+function selectRisk(row: typeof riskRows[number]) {
+  selectedRiskObject.value = row.object;
+  showToast(`已选中风险对象：${row.object}，右侧指标和操作将围绕该对象联动`);
+}
+
+function traceRisk(row: typeof riskRows[number]) {
+  const matched = alerts.value.find((alert) => alert.targetAsset.includes(row.object) || row.last.includes(alert.attackType)) || alerts.value[0];
+  selectedAlertId.value = matched.id;
+  activeTraceTab.value = '攻击过程';
+  setPage('trace');
+}
+
+function openAsset(row: typeof assetRows[number]) {
+  selectedAssetId.value = row.id;
+  showToast(`已打开资产详情：${row.name}`);
+}
+
+function syncAssets() {
+  showToast('已向云平台发起资产同步，新增与风险变化资产会自动高亮');
+}
+
+function resetAssetFilter() {
+  assetKeyword.value = '';
+  activeAssetTab.value = 'VPC';
+  showToast('已重置云资产筛选条件');
+}
+
+function openRuleDialog(mode: string) {
+  ruleDialogMode.value = mode;
+  ruleDialogOpen.value = true;
+}
+
+function copyRule(index: number) {
+  const source = filteredRules.value[index];
+  rules.value.unshift({ ...source, id: `R-${String(rules.value.length + 1).padStart(3, '0')}`, type: '自定义规则', enabled: false, memo: `复制自 ${source.id}` });
+  showToast(`已复制规则 ${source.id}，新规则默认停用等待确认`);
+}
+
+function deleteRule(index: number) {
+  const source = filteredRules.value[index];
+  confirmAction.value = { title: '删除业务规则', content: `确认删除规则 ${source.id} / ${source.group}？删除前建议先导出规则备份。`, onConfirm: () => {
+    rules.value = rules.value.filter((item) => item.id !== source.id);
+    showToast(`已删除规则 ${source.id}`);
+  }};
+}
+
+function runConfirmAction() {
+  confirmAction.value?.onConfirm();
+  confirmAction.value = null;
+}
+
+function saveWarningConfig(action: string) {
+  showToast(`${action}已完成，通知策略会同步应用到高危告警与溯源报告`);
 }
 
 function toggleRule(index: number) {
@@ -354,7 +518,7 @@ function testSmtp() {
         <section v-for="group in navGroups" :key="group.title" class="nav-group">
           <p>{{ group.title }}</p>
           <button v-for="item in group.items" :key="item.key" :class="['side-item', { active: activePage === item.key }]" @click="setPage(item.key)">
-            <span>{{ item.icon }}</span>{{ item.label }}
+            <span class="nav-icon">{{ item.icon }}</span><em>{{ item.label }}</em>
           </button>
         </section>
       </nav>
@@ -375,10 +539,10 @@ function testSmtp() {
 
       <section class="page-heading">
         <div>
-          <h2>{{ pageTitle }}</h2>
+          <h2><span class="heading-icon">{{ pageTitleIcon }}</span>{{ pageTitle }}</h2>
           <p>{{ pageDesc }}</p>
         </div>
-        <button class="blue-button" @click="showToast('已刷新当前页面模拟数据')">刷新数据</button>
+        <button class="blue-button" @click="refreshPage">刷新数据</button>
       </section>
 
       <section v-if="activePage === 'overview'" class="page-stack">
@@ -395,14 +559,14 @@ function testSmtp() {
 
           <div class="map-panel panel">
             <div class="kpi-strip">
-              <article v-for="kpi in kpis" :key="kpi.label" :data-tone="kpi.tone">
+              <article v-for="kpi in kpis" :key="kpi.label" :data-tone="kpi.tone" role="button" tabindex="0" @click="setPage(kpi.label.includes('region') ? 'assets' : 'risk')">
                 <span>{{ kpi.icon }}</span><p>{{ kpi.label }}</p><strong>{{ kpi.value }}</strong><small>总量 {{ kpi.total }}</small><i></i>
               </article>
             </div>
             <div class="china-map-light">
               <div class="map-title">云内流量安全态势监测</div>
-              <div class="node attacker"><strong>攻击源 IP：36.21.0.49</strong><small>成都 · SQL注入</small></div>
-              <div class="node target"><strong>目的 IP：39.110.116.43</strong><small>北京 · 数据模型工具</small></div>
+              <button class="node attacker map-click-node" @click="openMapEndpoint('source')"><strong>攻击源 IP：36.21.0.49</strong><small>成都 · SQL注入</small></button>
+              <button class="node target map-click-node" @click="openMapEndpoint('target')"><strong>目的 IP：39.110.116.43</strong><small>北京 · 数据模型工具</small></button>
               <div class="route route-a"></div><div class="route route-b"></div><div class="hotspot h1"></div><div class="hotspot h2"></div>
             </div>
           </div>
@@ -417,7 +581,7 @@ function testSmtp() {
           <div class="panel donut-panel">
             <div class="panel-title"><h3>攻击类型分布</h3><div><button class="mini active">互联网</button><button class="mini">云内横向</button></div></div>
             <div class="donut-wrap"><div class="donut"><span>云主机</span></div><div class="donut alt"><span>容器</span></div></div>
-            <div class="tag-cloud"><span>SQL注入</span><span>XSS</span><span>信息泄露</span><span>恶意程序</span><span>端口扫描</span><span>目录遍历</span></div>
+            <div class="tag-cloud clickable-tags"><button @click="focusAttackType('SQL注入')">SQL注入</button><button @click="focusAttackType('信息泄露')">信息泄露</button><button @click="focusAttackType('未授权访问')">未授权访问</button><button @click="focusAttackType('端口扫描')">端口扫描</button><button @click="focusAttackType('暴力破解')">暴力破解</button><button @click="focusAttackType('违规外联')">违规外联</button></div>
           </div>
 
           <div class="panel source-panel">
@@ -440,26 +604,26 @@ function testSmtp() {
 
       <section v-if="activePage === 'alerts'" class="page-stack">
         <div class="filter-card scene-card">
-          <label>威胁场景：</label><button v-for="scene in scenarios" :key="scene.name" :class="['pill', { active: selectedScenario === scene.name }]" @click="selectedScenario = scene.name">{{ scene.name }} <b>{{ scene.count }}</b></button><button class="pill plus">+</button>
-          <div class="type-tags"><button v-for="tag in typeTags" :key="tag" :class="{ active: selectedType === tag }" @click="selectedType = selectedType === tag ? '全部类型' : tag">{{ tag }}</button></div>
+          <label>威胁场景：</label><button v-for="scene in scenarios" :key="scene.name" :class="['pill', { active: selectedScenario === scene.name }]" @click="applyScenario(scene.name)"><span class="sub-icon">{{ iconFor(scene.name) }}</span>{{ scene.name }} <b>{{ scene.count }}</b></button><button class="pill plus">+</button>
+          <div class="type-tags"><button v-for="tag in typeTags" :key="tag" :class="{ active: selectedType === tag }" @click="selectedType = selectedType === tag ? '全部类型' : tag"><span class="sub-icon">{{ iconFor(tag) }}</span>{{ tag }}</button></div>
         </div>
         <div class="toolbar-card">
           <div><button class="blue-button" @click="batchProcess">批量处理</button><button class="white-button" @click="showToast('已导出当前筛选条件下的告警数据')">导出数据</button></div>
           <div class="toolbar-controls"><select v-model="selectedType"><option>全部类型</option><option v-for="tag in typeTags" :key="tag">{{ tag }}</option></select><select v-model="selectedLevel"><option>全部等级</option><option>高危</option><option>中危</option><option>低危</option></select><select v-model="selectedStatus"><option>全部状态</option><option>成功</option><option>可疑</option><option>未成功</option><option>已处理</option><option>已阻断</option></select><input v-model="alertKeyword" placeholder='源IP = "192.168.11.32"' /><button class="blue-button" @click="showToast('已执行精准查询')">精准查询</button><button class="blue-button secondary" @click="resetAlertFilter">重置筛选</button></div>
         </div>
         <div class="table-card">
-          <table class="data-table"><thead><tr><th><input type="checkbox" /></th><th>序号</th><th>源IP</th><th>目的IP</th><th>攻击类型</th><th>攻击状态</th><th>详细参数</th><th>告警时间</th><th>操作</th></tr></thead><tbody><tr v-for="(item, index) in filteredAlerts" :key="item.id"><td><input type="checkbox" :checked="selectedRows.includes(item.id)" @change="toggleRow(item.id)" /></td><td>{{ index + 1 }}</td><td><strong>{{ item.sourceIp }}</strong><small>{{ item.sourceGeo }}</small></td><td><strong>{{ item.targetIp }}</strong><small>{{ item.targetAsset }}</small></td><td><span :class="levelClass(item.level)">{{ item.attackType }} [{{ item.rule }}]</span></td><td><span :class="statusClass(item.status)">{{ item.level }} / {{ item.status }}</span></td><td class="param">{{ item.detail }}</td><td>{{ item.time }}</td><td class="ops"><button @click="goTrace(item.id)">溯源分析</button><button @click="handleAlertAction(item.id, '标记误报')">标记误报</button><button @click="moreMenuId = moreMenuId === item.id ? '' : item.id">更多</button><div v-if="moreMenuId === item.id" class="more-menu"><button @click="handleAlertAction(item.id, '标记误报')">标记误报</button><button @click="handleAlertAction(item.id, '加白')">加白</button><button @click="handleAlertAction(item.id, '加资产')">加资产</button><button @click="openAddIntelligence(item.sourceIp)">加情报</button><button @click="handleAlertAction(item.id, '标记已处理')">标记已处理</button><button @click="handleAlertAction(item.id, '封禁')">封禁</button><button @click="handleAlertAction(item.id, '阻断隔离')">阻断隔离</button></div></td></tr></tbody></table>
+          <table class="data-table"><thead><tr><th><input type="checkbox" :checked="allAlertSelected" @change="toggleAllAlerts" /></th><th>序号</th><th>源IP</th><th>目的IP</th><th>攻击类型</th><th>攻击状态</th><th>详细参数</th><th>告警时间</th><th>操作</th></tr></thead><tbody><tr v-for="(item, index) in filteredAlerts" :key="item.id"><td><input type="checkbox" :checked="selectedRows.includes(item.id)" @change="toggleRow(item.id)" /></td><td>{{ index + 1 }}</td><td><strong>{{ item.sourceIp }}</strong><small>{{ item.sourceGeo }}</small></td><td><strong>{{ item.targetIp }}</strong><small>{{ item.targetAsset }}</small></td><td><span :class="levelClass(item.level)">{{ item.attackType }} [{{ item.rule }}]</span></td><td><span :class="statusClass(item.status)">{{ item.level }} / {{ item.status }}</span></td><td class="param">{{ item.detail }}</td><td>{{ item.time }}</td><td class="ops"><button @click="openAlert(item.id)">详情</button><button @click="goTrace(item.id)">溯源分析</button><button @click="handleAlertAction(item.id, '标记误报')">标记误报</button><button @click="moreMenuId = moreMenuId === item.id ? '' : item.id">更多</button><div v-if="moreMenuId === item.id" class="more-menu"><button @click="handleAlertAction(item.id, '标记误报')">标记误报</button><button @click="handleAlertAction(item.id, '加白')">加白</button><button @click="handleAlertAction(item.id, '加资产')">加资产</button><button @click="openAddIntelligence(item.sourceIp)">加情报</button><button @click="handleAlertAction(item.id, '标记已处理')">标记已处理</button><button @click="handleAlertAction(item.id, '封禁')">封禁</button><button @click="handleAlertAction(item.id, '阻断隔离')">阻断隔离</button></div></td></tr></tbody></table>
           <div class="pagination"><span>共5000条</span><div><button>上一页</button><b>1</b><b class="active">2</b><b>3</b><span>...</span><b>10</b><button>下一页</button><span>到第</span><input value="1" /><span>页</span></div></div>
         </div>
       </section>
 
       <section v-if="activePage === 'intelligence'" class="page-stack">
-        <div class="filter-card grid-filter"><label>情报IP <input placeholder="请输入IP，多个以逗号分隔" /></label><label>情报状态 <select><option>请选择情报状态</option><option>有效</option><option>失效</option></select></label><label>情报等级 <select><option>请选择情报等级</option><option>高危</option><option>中危</option></select></label><label>情报标签 <input placeholder="请输入情报标签" /></label><button class="blue-button" @click="showToast('已查询威胁情报')">查找</button><button class="white-button">重置</button><button class="link-button">展开⌄</button></div>
-        <div class="table-card"><div class="table-toolbar"><div><button class="blue-button" @click="openAddIntelligence('')">新增情报</button><button class="white-button">情报查询</button></div><label class="switch-line">只看命中：<input type="checkbox" v-model="onlyHit" /></label></div><table class="data-table"><thead><tr><th><input type="checkbox" /></th><th>序号</th><th>情报内容</th><th>受影响IP</th><th>命中总次数</th><th>情报等级</th><th>可信度等级</th><th>情报类型</th><th>情报来源</th><th>时效状态</th><th>录入时间</th><th>最近命中时间</th><th>操作</th></tr></thead><tbody><tr v-for="(item, index) in filteredIntelligence" :key="item.id"><td><input type="checkbox" /></td><td>{{ index + 1 }}</td><td>{{ item.content }}</td><td class="multiline">{{ item.affected }}</td><td>{{ item.hits }}</td><td><span :class="levelClass(item.level)">{{ item.level }}</span></td><td><span class="tag warning">{{ item.trust }}</span></td><td>{{ item.type }}</td><td>{{ item.source }}</td><td>{{ item.effect }}</td><td>{{ item.created }}</td><td>{{ item.latest }}</td><td class="ops"><button @click="showToast('已打开情报详情')">查看详情</button><button @click="showToast('已删除情报')">删除情报</button></td></tr></tbody></table></div>
+        <div class="filter-card grid-filter"><label>情报IP <input v-model="intelligenceQuery" placeholder="请输入IP，多个以逗号分隔" /></label><label>情报状态 <select><option>请选择情报状态</option><option>有效</option><option>失效</option></select></label><label>情报等级 <select><option>请选择情报等级</option><option>高危</option><option>中危</option></select></label><label>情报标签 <input placeholder="请输入情报标签" /></label><button class="blue-button" @click="showToast(`已查询到 ${filteredIntelligence.length} 条威胁情报`)">查找</button><button class="white-button" @click="intelligenceQuery = ''; onlyHit = false; showToast('已重置情报筛选条件')">重置</button><button class="link-button">展开⌄</button></div>
+        <div class="table-card"><div class="table-toolbar"><div><button class="blue-button" @click="openAddIntelligence('')">新增情报</button><button class="white-button">情报查询</button></div><label class="switch-line">只看命中：<input type="checkbox" v-model="onlyHit" /></label></div><table class="data-table"><thead><tr><th><input type="checkbox" /></th><th>序号</th><th>情报内容</th><th>受影响IP</th><th>命中总次数</th><th>情报等级</th><th>可信度等级</th><th>情报类型</th><th>情报来源</th><th>时效状态</th><th>录入时间</th><th>最近命中时间</th><th>操作</th></tr></thead><tbody><tr v-for="(item, index) in filteredIntelligence" :key="item.id"><td><input type="checkbox" /></td><td>{{ index + 1 }}</td><td>{{ item.content }}</td><td class="multiline">{{ item.affected }}</td><td>{{ item.hits }}</td><td><span :class="levelClass(item.level)">{{ item.level }}</span></td><td><span class="tag warning">{{ item.trust }}</span></td><td>{{ item.type }}</td><td>{{ item.source }}</td><td>{{ item.effect }}</td><td>{{ item.created }}</td><td>{{ item.latest }}</td><td class="ops"><button @click="viewIntelligence(item)">详情</button><button @click="linkIntelligenceAlerts(item)">关联告警</button><button @click="toggleIntelligence(index)">{{ item.effect === '有效' ? '停用' : '启用' }}</button><button @click="deleteIntelligence(index)">删除</button></td></tr></tbody></table></div>
       </section>
 
       <section v-if="activePage === 'trace'" class="page-stack">
-        <div class="tab-strip"><button v-for="tab in ['攻击过程','资产行为分析','资产关联关系','攻击者画像','流量包分析']" :key="tab" :class="{ active: activeTraceTab === tab }" @click="activeTraceTab = tab as TraceTab">{{ tab }}</button></div>
+        <div class="tab-strip"><button v-for="tab in ['攻击过程','资产行为分析','资产关联关系','攻击者画像','流量包分析']" :key="tab" :class="{ active: activeTraceTab === tab }" @click="activeTraceTab = tab as TraceTab; showToast(`已切换溯源子模块：${tab}`)"><span class="sub-icon">{{ iconFor(tab) }}</span>{{ tab }}</button></div>
         <div v-if="activeTraceTab === '攻击过程'" class="trace-report panel"><h3>{{ selectedAlert.sourceIp.split(':')[0] }} 攻击事件报告</h3><div class="timeline"><article v-for="event in traceEvents" :key="event.title"><time>{{ event.time }}</time><div><h4>{{ event.title }}</h4><p>{{ event.content }}</p></div></article></div></div>
         <div v-else-if="activeTraceTab === '资产行为分析'" class="graph-card"><div class="zone cloud">云平台<div class="server-node">{{ selectedAlert.targetIp.split(':')[0] }}<small>{{ selectedAlert.targetAsset }}</small></div></div><div class="zone dmz">云下DMZ</div><div class="zone office">云下办公区</div><div class="zone internet">Internet <span>🇨🇦</span><span>🇨🇳</span><span>🇸🇪</span><span>🇯🇵</span><span>🇺🇸</span></div><svg class="graph-lines"><line x1="36%" y1="35%" x2="82%" y2="23%"/><line x1="36%" y1="35%" x2="82%" y2="42%"/><line x1="36%" y1="35%" x2="82%" y2="61%"/><line x1="36%" y1="35%" x2="22%" y2="75%"/></svg><div class="edge-label l1">目录遍历</div><div class="edge-label l2">SQL注入</div><div class="edge-label l3">端口扫描</div></div>
         <div v-else-if="activeTraceTab === '资产关联关系'" class="relation-wrap topology-drill-wrap">
@@ -529,18 +693,24 @@ function testSmtp() {
         <div v-else class="table-card"><table class="data-table"><thead><tr><th>序号</th><th>协议</th><th>源IP</th><th>目的IP</th><th>URI/特征</th><th>判定</th><th>包大小</th></tr></thead><tbody><tr v-for="row in packetRows" :key="row.no"><td>{{ row.no }}</td><td>{{ row.protocol }}</td><td>{{ row.src }}</td><td>{{ row.dst }}</td><td>{{ row.uri }}</td><td><span class="tag danger">{{ row.verdict }}</span></td><td>{{ row.size }}</td></tr></tbody></table></div>
       </section>
 
-      <section v-if="activePage === 'risk'" class="page-stack"><div class="tab-strip"><button v-for="tab in ['VPC','业务系统','云主机','容器','物理机']" :key="tab" :class="{ active: riskDimension === tab }" @click="riskDimension = tab">{{ tab }}</button></div><div class="risk-grid"><article v-for="row in selectedRiskRows" :key="row.object" class="risk-card"><div><h3>{{ row.object }}</h3><p>{{ row.vpc }} · 最近风险：{{ row.last }}</p></div><strong>{{ row.trend }}</strong><div class="risk-bars"><span :style="{ width: `${row.high}%` }" class="high"></span><span :style="{ width: `${row.mid}%` }" class="mid"></span><span :style="{ width: `${row.low}%` }" class="low"></span></div><button @click="setPage('assets')">查看资产</button></article></div><div class="table-card"><table class="data-table"><thead><tr><th>对象</th><th>维度</th><th>所属域</th><th>高危</th><th>中危</th><th>低危</th><th>最后命中</th><th>操作</th></tr></thead><tbody><tr v-for="row in selectedRiskRows" :key="row.object"><td>{{ row.object }}</td><td>{{ row.dim }}</td><td>{{ row.vpc }}</td><td><span class="tag danger">{{ row.high }}</span></td><td><span class="tag warning">{{ row.mid }}</span></td><td><span class="tag info">{{ row.low }}</span></td><td>{{ row.last }}</td><td class="ops"><button @click="setPage('trace')">溯源</button><button @click="setPage('alerts')">告警</button></td></tr></tbody></table></div></section>
+      <section v-if="activePage === 'risk'" class="page-stack"><div class="tab-strip"><button v-for="tab in ['VPC','业务系统','云主机','容器','物理机']" :key="tab" :class="{ active: riskDimension === tab }" @click="riskDimension = tab; selectedRiskObject = ''; showToast(`已切换风险维度：${tab}`)"><span class="sub-icon">{{ iconFor(tab) }}</span>{{ tab }}</button></div><div class="risk-insight panel"><strong>{{ selectedRiskRow.object }}</strong><span>高危 {{ selectedRiskRow.high }} · 中危 {{ selectedRiskRow.mid }} · 低危 {{ selectedRiskRow.low }}</span><button class="blue-button" @click="traceRisk(selectedRiskRow)">按该风险生成溯源</button></div><div class="risk-grid"><article v-for="row in selectedRiskRows" :key="row.object" :class="['risk-card', { active: selectedRiskRow.object === row.object }]" @click="selectRisk(row)"><div><h3>{{ row.object }}</h3><p>{{ row.vpc }} · 最近风险：{{ row.last }}</p></div><strong>{{ row.trend }}</strong><div class="risk-bars"><span :style="{ width: `${row.high}%` }" class="high"></span><span :style="{ width: `${row.mid}%` }" class="mid"></span><span :style="{ width: `${row.low}%` }" class="low"></span></div><button @click.stop="setPage('assets')">查看资产</button></article></div><div class="table-card"><table class="data-table"><thead><tr><th>对象</th><th>维度</th><th>所属域</th><th>高危</th><th>中危</th><th>低危</th><th>最后命中</th><th>操作</th></tr></thead><tbody><tr v-for="row in selectedRiskRows" :key="row.object"><td>{{ row.object }}</td><td>{{ row.dim }}</td><td>{{ row.vpc }}</td><td><span class="tag danger">{{ row.high }}</span></td><td><span class="tag warning">{{ row.mid }}</span></td><td><span class="tag info">{{ row.low }}</span></td><td>{{ row.last }}</td><td class="ops"><button @click="traceRisk(row)">溯源</button><button @click="selectedType = row.last; setPage('alerts')">告警</button></td></tr></tbody></table></div></section>
 
-      <section v-if="activePage === 'assets'" class="page-stack"><div class="asset-stat-grid"><article v-for="stat in assetStats" :key="stat.label" :data-tone="stat.tone"><span>{{ stat.icon }}</span><p>{{ stat.label }}</p><strong>{{ stat.value }}</strong></article></div><div class="tab-strip"><button v-for="tab in ['region','VPC','物理机','云主机','容器','漏洞管理','弱口令','两高一弱']" :key="tab" :class="{ active: activeAssetTab === tab }" @click="activeAssetTab = tab as AssetTab">{{ tab }}</button></div><div class="toolbar-card"><div></div><div class="toolbar-controls"><select><option>region</option><option>资产名称</option></select><input v-model="assetKeyword" placeholder="请输入查询条件"/><button class="blue-button">精准查询</button><button class="blue-button secondary" @click="assetKeyword = ''">重置筛选</button></div></div><div class="table-card"><table class="data-table"><thead><tr><th><input type="checkbox" /></th><th>序号</th><th>VPC ID / 资产ID</th><th>VPC名称 / 资产名称</th><th>所属region</th><th>网段</th><th>云主机数量</th><th>关联容器数量</th><th>风险分</th><th>更新时间</th><th>操作</th></tr></thead><tbody><tr v-for="(row, index) in filteredAssets" :key="row.id"><td><input type="checkbox" /></td><td>{{ index + 1 }}</td><td>{{ row.id }}</td><td>{{ row.name }}</td><td>{{ row.region }}</td><td>{{ row.cidr }}</td><td>{{ row.hosts }}</td><td>{{ row.containers }}</td><td><span :class="row.risk > 85 ? 'tag danger' : 'tag warning'">{{ row.risk }}</span></td><td>{{ row.updated }}</td><td class="ops"><button @click="showToast('已打开资产详情')">详情</button><button>编辑</button><button>删除</button></td></tr></tbody></table><div class="pagination"><span>共5000条</span><div><button>上一页</button><b>1</b><b class="active">2</b><b>3</b><span>...</span><b>10</b><button>下一页</button></div></div></div></section>
+      <section v-if="activePage === 'assets'" class="page-stack"><div class="asset-stat-grid"><article v-for="stat in assetStats" :key="stat.label" :data-tone="stat.tone"><span>{{ stat.icon }}</span><p>{{ stat.label }}</p><strong>{{ stat.value }}</strong></article></div><div class="tab-strip"><button v-for="tab in ['region','VPC','物理机','云主机','容器','漏洞管理','弱口令','两高一弱']" :key="tab" :class="{ active: activeAssetTab === tab }" @click="activeAssetTab = tab as AssetTab; showToast(`已切换资产子模块：${tab}`)"><span class="sub-icon">{{ iconFor(tab) }}</span>{{ tab }}</button></div><div class="toolbar-card"><div><button class="blue-button" @click="syncAssets">同步资产</button><button class="white-button" @click="setPage('risk')">关联风险</button></div><div class="toolbar-controls"><select><option>region</option><option>资产名称</option></select><input v-model="assetKeyword" placeholder="请输入查询条件"/><button class="blue-button">精准查询</button><button class="blue-button secondary" @click="resetAssetFilter">重置筛选</button></div></div><div class="table-card"><table class="data-table"><thead><tr><th><input type="checkbox" /></th><th>序号</th><th>VPC ID / 资产ID</th><th>VPC名称 / 资产名称</th><th>所属region</th><th>网段</th><th>云主机数量</th><th>关联容器数量</th><th>风险分</th><th>更新时间</th><th>操作</th></tr></thead><tbody><tr v-for="(row, index) in filteredAssets" :key="row.id"><td><input type="checkbox" /></td><td>{{ index + 1 }}</td><td>{{ row.id }}</td><td>{{ row.name }}</td><td>{{ row.region }}</td><td>{{ row.cidr }}</td><td>{{ row.hosts }}</td><td>{{ row.containers }}</td><td><span :class="row.risk > 85 ? 'tag danger' : 'tag warning'">{{ row.risk }}</span></td><td>{{ row.updated }}</td><td class="ops"><button @click="openAsset(row)">详情</button><button @click="showToast(`已进入 ${row.name} 编辑态`)">编辑</button><button @click="confirmAction = { title: '删除资产', content: `确认从原型清单中删除 ${row.name}？`, onConfirm: () => showToast('已提交资产删除申请，等待二次审批') }">删除</button></td></tr></tbody></table><div class="pagination"><span>共5000条</span><div><button>上一页</button><b>1</b><b class="active">2</b><b>3</b><span>...</span><b>10</b><button>下一页</button></div></div></div></section>
 
-      <section v-if="activePage === 'rules'" class="page-stack"><div class="tab-strip"><button v-for="tab in ['规则配置','规则组配置','白名单']" :key="tab" :class="{ active: activeRuleTab === tab }" @click="activeRuleTab = tab as RuleTab">{{ tab }}</button></div><div class="toolbar-card"><div><button class="blue-button">添加自定义类型</button><button class="blue-button">添加自定义规则</button><button class="green-button">更新规则</button><button class="green-button">数据导入</button><button class="green-button">数据导出</button></div><div class="toolbar-controls"><input v-model="ruleKeyword" placeholder="支持输入序号、规则组、威胁等级、攻击状态、备注"/><button class="blue-button">查找</button></div></div><div v-if="activeRuleTab !== '白名单'" class="table-card"><table class="data-table"><thead><tr><th><input type="checkbox" /></th><th>序号</th><th>规则类型</th><th>规则组</th><th>是否启用</th><th>所属类型</th><th>威胁等级</th><th>攻击状态</th><th>是否存在后门</th><th>备注</th><th>操作</th></tr></thead><tbody><tr v-for="(row, index) in filteredRules" :key="row.id"><td><input type="checkbox" /></td><td>{{ index + 1 }}</td><td><span class="tag info">{{ row.type }}</span></td><td>{{ row.group }}</td><td><button :class="['switch', { on: row.enabled }]" @click="toggleRule(index)">{{ row.enabled ? '是' : '否' }}</button></td><td>{{ row.belong }}</td><td><span :class="levelClass(row.level)">{{ row.level }}</span></td><td><span class="tag success">{{ row.attackStatus }}</span></td><td><span class="tag warning">{{ row.backdoor }}</span></td><td>{{ row.memo }}</td><td class="ops"><button>修改</button><button>删除</button></td></tr></tbody></table></div><div v-else class="table-card"><table class="data-table"><thead><tr><th>序号</th><th>白名单对象</th><th>类型</th><th>作用范围</th><th>原因</th><th>过期时间</th><th>启用</th><th>操作</th></tr></thead><tbody><tr v-for="(row, index) in whitelist" :key="row.id"><td>{{ index + 1 }}</td><td>{{ row.object }}</td><td>{{ row.type }}</td><td>{{ row.scope }}</td><td>{{ row.reason }}</td><td>{{ row.expire }}</td><td><span :class="row.enabled ? 'tag success' : 'tag info'">{{ row.enabled ? '是' : '否' }}</span></td><td class="ops"><button>修改</button><button>删除</button></td></tr></tbody></table></div></section>
+      <section v-if="activePage === 'rules'" class="page-stack"><div class="tab-strip"><button v-for="tab in ['规则配置','规则组配置','白名单']" :key="tab" :class="{ active: activeRuleTab === tab }" @click="activeRuleTab = tab as RuleTab; showToast(`已切换业务规则子模块：${tab}`)"><span class="sub-icon">{{ iconFor(tab) }}</span>{{ tab }}</button></div><div class="toolbar-card"><div><button class="blue-button" @click="openRuleDialog('添加自定义类型')">添加自定义类型</button><button class="blue-button" @click="openRuleDialog('添加自定义规则')">添加自定义规则</button><button class="green-button" @click="showToast('已更新本地规则库与自定义规则命中统计')">更新规则</button><button class="green-button" @click="showToast('已打开规则导入校验流程')">数据导入</button><button class="green-button" @click="showToast('已导出当前规则与白名单配置')">数据导出</button></div><div class="toolbar-controls"><input v-model="ruleKeyword" placeholder="支持输入序号、规则组、威胁等级、攻击状态、备注"/><button class="blue-button">查找</button></div></div><div v-if="activeRuleTab !== '白名单'" class="table-card"><table class="data-table"><thead><tr><th><input type="checkbox" /></th><th>序号</th><th>规则类型</th><th>规则组</th><th>是否启用</th><th>所属类型</th><th>威胁等级</th><th>攻击状态</th><th>是否存在后门</th><th>备注</th><th>操作</th></tr></thead><tbody><tr v-for="(row, index) in filteredRules" :key="row.id"><td><input type="checkbox" /></td><td>{{ index + 1 }}</td><td><span class="tag info">{{ row.type }}</span></td><td>{{ row.group }}</td><td><button :class="['switch', { on: row.enabled }]" @click="toggleRule(index)">{{ row.enabled ? '是' : '否' }}</button></td><td>{{ row.belong }}</td><td><span :class="levelClass(row.level)">{{ row.level }}</span></td><td><span class="tag success">{{ row.attackStatus }}</span></td><td><span class="tag warning">{{ row.backdoor }}</span></td><td>{{ row.memo }}</td><td class="ops"><button @click="openRuleDialog(`修改规则 ${row.id}`)">修改</button><button @click="copyRule(index)">复制</button><button @click="deleteRule(index)">删除</button></td></tr></tbody></table></div><div v-else class="table-card"><table class="data-table"><thead><tr><th>序号</th><th>白名单对象</th><th>类型</th><th>作用范围</th><th>原因</th><th>过期时间</th><th>启用</th><th>操作</th></tr></thead><tbody><tr v-for="(row, index) in whitelist" :key="row.id"><td>{{ index + 1 }}</td><td>{{ row.object }}</td><td>{{ row.type }}</td><td>{{ row.scope }}</td><td>{{ row.reason }}</td><td>{{ row.expire }}</td><td><span :class="row.enabled ? 'tag success' : 'tag info'">{{ row.enabled ? '是' : '否' }}</span></td><td class="ops"><button>修改</button><button>删除</button></td></tr></tbody></table></div></section>
 
-      <section v-if="activePage === 'warning'" class="page-stack"><div class="tab-strip"><button v-for="tab in ['邮件通知','邮件列表','邮件服务器配置']" :key="tab" :class="{ active: activeWarningTab === tab }" @click="activeWarningTab = tab as WarningTab">{{ tab }}</button></div><div v-if="activeWarningTab === '邮件服务器配置'" class="mail-card panel"><div class="form-row required"><label>发送服务器/SMTP服务器：</label><input placeholder="输入发送服务器"/><label class="check"><input type="checkbox"/> SSL端口</label><input placeholder="输入端口"/><button class="blue-button" @click="testSmtp">{{ smtpTesting ? '测试中...' : '测试连通性' }}</button></div><div class="hint-bar">电子邮件的发送服务器，可以填写内部搭建的邮件服务器地址或外网发送地址</div><div class="form-row required"><label>发送Email账号：</label><input placeholder="输入发送Email地址"/></div><div class="hint-bar">能够登录该电子邮件的服务器 Email 账号</div><div class="form-row required"><label>发送Email密码：</label><input placeholder="输入发送Email密码" type="password"/><button class="eye">◉</button></div><div class="hint-bar">能够登录该电子邮件的服务器 Email 密码</div><div class="form-row required"><label>发送邮件：</label><input placeholder="输入发送人邮件"/></div><div class="hint-bar">作为发送该威胁邮件的发送人邮件</div><div class="form-row required"><label>发送人名称：</label><input placeholder="输入发送人名称"/></div><div class="hint-bar">该威胁邮件的显示的发送人名称</div><div class="form-row required"><label>接收邮件：</label><input placeholder="接收人邮件，输入多个换行"/></div><div class="hint-bar">接收该威胁邮件的接收邮件，多个接收邮件用；分隔</div><div class="form-row"><label>邮件主题：</label><input placeholder="输入邮件主题"/></div><div class="mail-actions"><button class="green-button" @click="showToast('已测试并提交邮件服务器配置')">测试并提交配置</button><button class="red-button" @click="showToast('已删除邮件服务器配置')">删除配置</button></div></div><div v-else-if="activeWarningTab === '邮件通知'" class="panel notice-config"><h3>邮件通知策略</h3><label class="switch-line">高危告警实时发送 <input type="checkbox" v-model="mailEnabled" /></label><label class="switch-line">中低危告警按小时汇总 <input type="checkbox" checked /></label><label class="switch-line">溯源报告生成后发送附件 <input type="checkbox" checked /></label></div><div v-else class="table-card"><table class="data-table"><thead><tr><th>序号</th><th>接收人</th><th>部门</th><th>接收等级</th><th>状态</th><th>操作</th></tr></thead><tbody><tr><td>1</td><td>secops@example.com</td><td>安全运营中心</td><td>高危/中危</td><td><span class="tag success">启用</span></td><td class="ops"><button>编辑</button><button>删除</button></td></tr><tr><td>2</td><td>auditor@example.com</td><td>审计组</td><td>高危</td><td><span class="tag info">停用</span></td><td class="ops"><button>编辑</button><button>删除</button></td></tr></tbody></table></div></section>
+      <section v-if="activePage === 'warning'" class="page-stack"><div class="tab-strip"><button v-for="tab in ['邮件通知','邮件列表','邮件服务器配置']" :key="tab" :class="{ active: activeWarningTab === tab }" @click="activeWarningTab = tab as WarningTab; showToast(`已切换威胁预警子模块：${tab}`)"><span class="sub-icon">{{ iconFor(tab) }}</span>{{ tab }}</button></div><div v-if="activeWarningTab === '邮件服务器配置'" class="mail-card panel"><div class="form-row required"><label>发送服务器/SMTP服务器：</label><input placeholder="输入发送服务器"/><label class="check"><input type="checkbox"/> SSL端口</label><input placeholder="输入端口"/><button class="blue-button" @click="testSmtp">{{ smtpTesting ? '测试中...' : '测试连通性' }}</button></div><div class="hint-bar">电子邮件的发送服务器，可以填写内部搭建的邮件服务器地址或外网发送地址</div><div class="form-row required"><label>发送Email账号：</label><input placeholder="输入发送Email地址"/></div><div class="hint-bar">能够登录该电子邮件的服务器 Email 账号</div><div class="form-row required"><label>发送Email密码：</label><input placeholder="输入发送Email密码" type="password"/><button class="eye">◉</button></div><div class="hint-bar">能够登录该电子邮件的服务器 Email 密码</div><div class="form-row required"><label>发送邮件：</label><input placeholder="输入发送人邮件"/></div><div class="hint-bar">作为发送该威胁邮件的发送人邮件</div><div class="form-row required"><label>发送人名称：</label><input placeholder="输入发送人名称"/></div><div class="hint-bar">该威胁邮件的显示的发送人名称</div><div class="form-row required"><label>接收邮件：</label><input placeholder="接收人邮件，输入多个换行"/></div><div class="hint-bar">接收该威胁邮件的接收邮件，多个接收邮件用；分隔</div><div class="form-row"><label>邮件主题：</label><input placeholder="输入邮件主题"/></div><div class="mail-actions"><button class="green-button" @click="saveWarningConfig('测试并提交邮件服务器配置')">测试并提交配置</button><button class="red-button" @click="confirmAction = { title: '删除邮件服务器配置', content: '确认删除当前 SMTP 配置？删除后威胁预警邮件将暂停发送。', onConfirm: () => saveWarningConfig('删除邮件服务器配置') }">删除配置</button></div></div><div v-else-if="activeWarningTab === '邮件通知'" class="panel notice-config"><h3>邮件通知策略</h3><label class="switch-line">高危告警实时发送 <input type="checkbox" v-model="mailEnabled" /></label><label class="switch-line">中低危告警按小时汇总 <input type="checkbox" checked /></label><label class="switch-line">溯源报告生成后发送附件 <input type="checkbox" checked /></label></div><div v-else class="table-card"><table class="data-table"><thead><tr><th>序号</th><th>接收人</th><th>部门</th><th>接收等级</th><th>状态</th><th>操作</th></tr></thead><tbody><tr><td>1</td><td>secops@example.com</td><td>安全运营中心</td><td>高危/中危</td><td><span class="tag success">启用</span></td><td class="ops"><button>编辑</button><button>删除</button></td></tr><tr><td>2</td><td>auditor@example.com</td><td>审计组</td><td>高危</td><td><span class="tag info">停用</span></td><td class="ops"><button>编辑</button><button>删除</button></td></tr></tbody></table></div></section>
     </main>
 
     <aside v-if="alertDrawerOpen" class="drawer"><button class="drawer-close" @click="alertDrawerOpen = false">×</button><h3>告警详情：{{ selectedAlert.id }}</h3><p>{{ selectedAlert.attackType }} 命中 {{ selectedAlert.targetAsset }}</p><dl><dt>源 IP</dt><dd>{{ selectedAlert.sourceIp }} · {{ selectedAlert.sourceGeo }}</dd><dt>目的 IP</dt><dd>{{ selectedAlert.targetIp }}</dd><dt>详细参数</dt><dd>{{ selectedAlert.detail }}</dd><dt>置信度</dt><dd>{{ selectedAlert.confidence }}%</dd></dl><div class="drawer-actions"><button class="blue-button" @click="goTrace(selectedAlert.id)">进入溯源分析</button><button class="white-button" @click="openAddIntelligence(selectedAlert.sourceIp)">加情报</button><button class="red-button" @click="handleAlertAction(selectedAlert.id, '阻断隔离')">阻断隔离</button></div></aside>
 
     <div v-if="intelligenceDialog" class="modal-mask"><div class="modal"><button class="drawer-close" @click="intelligenceDialog = false">×</button><h3>新增威胁情报</h3><label><span>情报内容</span><input v-model="intelligencePrefill" placeholder="请输入内容"/></label><label><span>情报标签</span><input placeholder="请输入内容"/></label><div class="check-grid"><span>检测项</span><label><input type="checkbox" checked/> IP</label><label><input type="checkbox"/> 域名</label><label><input type="checkbox"/> URL</label><label><input type="checkbox"/> 文件HASH</label><label><input type="checkbox"/> 邮箱</label><label><input type="checkbox"/> 邮件正文</label></div><label><span>威胁等级</span><select><option>中危</option><option>高危</option><option>低危</option></select></label><label><span>可信度等级</span><select><option>中可信</option><option>高可信</option><option>低可信</option></select></label><div class="modal-actions"><button class="white-button" @click="intelligenceDialog = false">取消</button><button class="blue-button" @click="addIntelligence">确定</button></div></div></div>
+
+    <aside v-if="selectedAsset" class="drawer asset-drawer"><button class="drawer-close" @click="selectedAssetId = ''">×</button><h3>资产详情：{{ selectedAsset.name }}</h3><p>{{ selectedAsset.type }} · {{ selectedAsset.region }} · 负责人：{{ selectedAsset.owner }}</p><dl><dt>资产标识</dt><dd>{{ selectedAsset.id }}</dd><dt>网段 / IP</dt><dd>{{ selectedAsset.cidr }}</dd><dt>云主机 / 容器</dt><dd>{{ selectedAsset.hosts }} / {{ selectedAsset.containers }}</dd><dt>风险分</dt><dd><span :class="selectedAsset.risk > 85 ? 'tag danger' : 'tag warning'">{{ selectedAsset.risk }}</span></dd></dl><div class="drawer-actions"><button class="blue-button" @click="activeTraceTab = '资产关联关系'; setPage('trace')">查看拓扑</button><button class="white-button" @click="setPage('risk')">关联风险</button><button class="red-button" @click="showToast(`${selectedAsset.name} 已加入重点监控`)" >重点监控</button></div></aside>
+
+    <div v-if="ruleDialogOpen" class="modal-mask"><div class="modal rule-modal"><button class="drawer-close" @click="ruleDialogOpen = false">×</button><h3>{{ ruleDialogMode }}</h3><label><span>规则名称</span><input placeholder="输入规则名称或规则类型" /></label><label><span>所属规则组</span><select><option>SQL_INJECT</option><option>EAST_WEST</option><option>WEB_API</option></select></label><label><span>威胁等级</span><select><option>高危</option><option>中危</option><option>低危</option></select></label><label><span>条件预览</span><textarea placeholder="示例：src_ip in threat_ioc and uri contains union select"></textarea></label><div class="hint-bar">保存前会进行语法校验、命中预估和规则冲突检查。</div><div class="modal-actions"><button class="white-button" @click="ruleDialogOpen = false">取消</button><button class="blue-button" @click="ruleDialogOpen = false; showToast(`${ruleDialogMode} 已保存，规则处于待发布状态`)">保存草稿</button></div></div></div>
+
+    <div v-if="confirmAction" class="modal-mask"><div class="modal confirm-modal"><h3>{{ confirmAction.title }}</h3><p>{{ confirmAction.content }}</p><div class="modal-actions"><button class="white-button" @click="confirmAction = null">取消</button><button class="red-button" @click="runConfirmAction">确认执行</button></div></div></div>
 
     <div v-if="toastText" class="toast">{{ toastText }}</div>
   </div>
