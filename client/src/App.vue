@@ -455,6 +455,101 @@ const filteredSceneRows = computed(() => selectedSceneModule.value.rows.filter((
   return matchLevel && matchStatus && (!keyword || haystack.includes(keyword));
 }));
 const selectedSceneEvent = computed(() => selectedSceneModule.value.rows.find((item) => item.id === selectedSceneEventId.value) || filteredSceneRows.value[0] || selectedSceneModule.value.rows[0]);
+const selectedSceneDetailSections = computed(() => {
+  const row = selectedSceneEvent.value;
+  const commonSection = {
+    title: '事件定位',
+    items: [
+      { label: '事件编号', value: row.id },
+      { label: '发生时间', value: row.time },
+      { label: '风险等级', value: row.level },
+      { label: '处置状态', value: row.status },
+      { label: '责任团队', value: row.owner },
+      { label: '统计口径', value: row.metric },
+    ],
+  };
+  const sceneSpecific = {
+    数据库行为分析: [
+      {
+        title: '数据库访问详情',
+        items: [
+          { label: '数据库实例', value: row.target },
+          { label: '访问源地址', value: row.source },
+          { label: '数据库协议', value: row.protocol },
+          { label: '行为类型', value: row.behavior },
+          { label: 'SQL / 命令指纹', value: row.evidence },
+          { label: '数据风险判断', value: row.detail },
+        ],
+      },
+    ],
+    WEB服务器分析: [
+      {
+        title: 'WEB 请求详情',
+        items: [
+          { label: 'Web 资产 / 域名', value: row.target },
+          { label: '请求来源', value: row.source },
+          { label: '访问协议', value: row.protocol },
+          { label: '命中攻击类型', value: row.behavior },
+          { label: 'URI / 参数载荷', value: row.evidence },
+          { label: '请求研判结果', value: row.detail },
+        ],
+      },
+    ],
+    非常规服务分析: [
+      {
+        title: '服务暴露详情',
+        items: [
+          { label: '暴露资产与端口', value: row.target },
+          { label: '访问源对象', value: row.source },
+          { label: '非常规协议', value: row.protocol },
+          { label: '服务异常类型', value: row.behavior },
+          { label: '握手 / Banner 证据', value: row.evidence },
+          { label: '暴露风险说明', value: row.detail },
+        ],
+      },
+    ],
+    登录行为分析: [
+      {
+        title: '认证行为详情',
+        items: [
+          { label: '登录入口 / 资产', value: row.target },
+          { label: '登录来源', value: row.source },
+          { label: '认证协议', value: row.protocol },
+          { label: '登录异常类型', value: row.behavior },
+          { label: '账号与认证证据', value: row.evidence },
+          { label: '登录风险判断', value: row.detail },
+        ],
+      },
+    ],
+    挖矿行为分析: [
+      {
+        title: '挖矿行为详情',
+        items: [
+          { label: '疑似挖矿资产', value: row.source },
+          { label: '矿池 / 外联目标', value: row.target },
+          { label: '通信协议', value: row.protocol },
+          { label: '挖矿特征', value: row.behavior },
+          { label: '矿池 / 资源证据', value: row.evidence },
+          { label: '资源异常判断', value: row.detail },
+        ],
+      },
+    ],
+    邮件安全分析: [
+      {
+        title: '邮件投递详情',
+        items: [
+          { label: '发件对象', value: row.source },
+          { label: '收件对象', value: row.target },
+          { label: '邮件协议', value: row.protocol },
+          { label: '邮件风险类型', value: row.behavior },
+          { label: '头部 / 附件 / 链接证据', value: row.evidence },
+          { label: '邮件安全判断', value: row.detail },
+        ],
+      },
+    ],
+  } as Record<SceneTab, { title: string; items: { label: string; value: string }[] }[]>;
+  return [commonSection, ...sceneSpecific[activeSceneTab.value]];
+});
 const sceneTotalEvents = computed(() => selectedSceneModule.value.rows.reduce((sum, item) => sum + Number.parseInt(item.metric.replace(/[^0-9]/g, '') || '1', 10), 0));
 const filteredBehaviorEvents = computed(() => behaviorEvents.filter((item) => activeBehaviorLayer.value === '全部' || item.layer === activeBehaviorLayer.value));
 const selectedBehaviorEvent = computed(() => behaviorEvents.find((item) => item.id === selectedBehaviorEventId.value) || behaviorEvents[0]);
@@ -1161,17 +1256,17 @@ function testSmtp() {
 
     
     
-      <aside v-if="sceneDrawerOpen" class="detail-drawer scene-detail-drawer">
-        <div class="drawer-mask" @click="sceneDrawerOpen = false"></div>
+      <aside v-if="sceneDrawerOpen" class="detail-drawer scene-detail-drawer" aria-label="场景分析详情抽屉">
         <section class="drawer-panel">
-          <header><div><span class="soc-kicker">{{ activeSceneTab }}</span><h3>{{ selectedSceneEvent.id }} · {{ selectedSceneEvent.behavior }}</h3><p>{{ selectedSceneEvent.time }} / {{ selectedSceneEvent.owner }}</p></div><button @click="sceneDrawerOpen = false">×</button></header>
-          <div class="drawer-grid">
-            <article><span>源对象</span><strong>{{ selectedSceneEvent.source }}</strong></article>
-            <article><span>目标对象</span><strong>{{ selectedSceneEvent.target }}</strong></article>
-            <article><span>协议/端口</span><strong>{{ selectedSceneEvent.protocol }}</strong></article>
-            <article><span>统计项</span><strong>{{ selectedSceneEvent.metric }}</strong></article>
+          <header><div><span class="soc-kicker">{{ activeSceneTab }}</span><h3>{{ selectedSceneEvent.id }} · {{ selectedSceneEvent.behavior }}</h3><p>{{ selectedSceneEvent.time }} / {{ selectedSceneEvent.owner }}</p></div><button aria-label="关闭场景分析详情" @click="sceneDrawerOpen = false">×</button></header>
+          <div class="scene-detail-sections">
+            <section v-for="section in selectedSceneDetailSections" :key="section.title" class="scene-detail-section">
+              <h4>{{ section.title }}</h4>
+              <div class="drawer-grid">
+                <article v-for="item in section.items" :key="item.label"><span>{{ item.label }}</span><strong>{{ item.value }}</strong></article>
+              </div>
+            </section>
           </div>
-          <div class="evidence-box"><h4>详情信息</h4><p>{{ selectedSceneEvent.detail }}</p><code>{{ selectedSceneEvent.evidence }}</code></div>
           <div class="evidence-box"><h4>处置建议</h4><p>{{ selectedSceneEvent.suggestion }}</p></div>
           <div class="drawer-actions"><button class="blue-button" @click="linkSceneToAlert">联动实时告警</button><button class="white-button" @click="goTrace(alerts[0].id)">进入溯源分析</button><button class="white-button" @click="showToast('已导出场景分析详情证据')">导出证据</button></div>
         </section>
