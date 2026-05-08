@@ -137,6 +137,29 @@ const behaviorStats = [
   { label: '敏感文件访问', value: '19', delta: '7 次阻断', icon: 'password', tone: 'green' },
 ];
 
+const behaviorSourceIps = [
+  { ip: '198.51.100.23', geo: '境外代理 · 回连载荷', hits: 86, level: '高危' as Severity, percent: 100, last: '2 分钟前' },
+  { ip: '203.0.113.45', geo: '云外出口 · 凭证上传', hits: 64, level: '高危' as Severity, percent: 74, last: '9 分钟前' },
+  { ip: '36.21.0.49', geo: '成都 · SQL 注入探测', hits: 51, level: '中危' as Severity, percent: 59, last: '18 分钟前' },
+  { ip: '172.16.120.16', geo: '测试环境 · 横向扫描', hits: 42, level: '中危' as Severity, percent: 49, last: '31 分钟前' },
+];
+
+const behaviorSevenDayTrend = [
+  { day: '05/02', total: 58, high: 9, blocked: 21 },
+  { day: '05/03', total: 72, high: 12, blocked: 26 },
+  { day: '05/04', total: 66, high: 10, blocked: 24 },
+  { day: '05/05', total: 91, high: 18, blocked: 35 },
+  { day: '05/06', total: 104, high: 22, blocked: 41 },
+  { day: '05/07', total: 96, high: 19, blocked: 38 },
+  { day: '今日', total: 119, high: 27, blocked: 46 },
+];
+
+const behaviorSevenDaySummary = [
+  { label: '7天威胁总量', value: '606', desc: '较上周 +18.4%', tone: 'blue' },
+  { label: '高危事件', value: '117', desc: '隔离优先级', tone: 'red' },
+  { label: '自动阻断', value: '231', desc: '联动策略命中', tone: 'green' },
+];
+
 const behaviorCategories = [
   { title: '容器安全层', icon: 'container', risk: '高危' as Severity, hits: 142, focus: '容器内运行时异常', desc: '检测容器内 shell 会话创建、安装新软件包、从非预期路径启动进程等偏离镜像基线的行为。', vectors: ['容器内 shell 会话创建', '容器内安装新软件包', '从 /tmp、/dev/shm 等非预期位置启动进程'] },
   { title: '主机安全层', icon: 'host', risk: '高危' as Severity, hits: 96, focus: '宿主机关键目录与权限变更', desc: '监控 /etc、/usr/bin、/usr/sbin 等敏感目录读写，识别文件所有权、访问权限变更和特权容器启动。', vectors: ['敏感目录读写', '文件所有权或权限变更', 'privileged 容器启动'] },
@@ -722,18 +745,39 @@ function testSmtp() {
       </section>
 
 <section v-if="activePage === 'behavior'" class="page-stack threat-behavior-page formal-behavior-page">
-        <div class="behavior-command-center">
-          <div class="soc-header-card behavior-compact-header">
-            <div class="soc-header-main"><span class="soc-kicker"><AppIcon name="behavior" size="16" /> Runtime Threat Monitoring</span><h2>威胁监测</h2><p>基于容器运行时、宿主机系统调用、网络连接与敏感文件访问证据，构建“指标—趋势—证据—处置”的运行时安全运营闭环。</p></div>
-            <div class="soc-header-actions"><button class="white-button" @click="showToast('已刷新威胁监测事件与规则命中统计')"><AppIcon name="refresh" size="15" /> 刷新事件</button><button class="blue-button" @click="showToast('已下发运行时规则同步任务')"><AppIcon name="rules" size="15" /> 同步规则</button><button class="white-button" @click="showToast('已导出威胁监测证据包')"><AppIcon name="export" size="15" /> 导出证据</button></div>
-          </div>
+        <div class="behavior-command-center behavior-threat-summary">
+          <section class="panel source-ip-board">
+            <div class="summary-head">
+              <div><span class="soc-kicker"><AppIcon name="behavior" size="16" /> Runtime Threat Monitoring</span><h2>威胁监测</h2><p>按攻击源 IP 聚合近 7 天威胁命中，优先识别高频回连、凭证上传与横向扫描来源。</p></div>
+              <div class="soc-header-actions"><button class="white-button" @click="showToast('已刷新攻击源 IP 与 7 天趋势统计')"><AppIcon name="refresh" size="15" /> 刷新事件</button><button class="blue-button" @click="showToast('已下发运行时规则同步任务')"><AppIcon name="rules" size="15" /> 同步规则</button><button class="white-button" @click="showToast('已导出威胁监测证据包')"><AppIcon name="export" size="15" /> 导出证据</button></div>
+            </div>
+            <div class="source-ip-list">
+              <article v-for="item in behaviorSourceIps" :key="item.ip" class="source-ip-row">
+                <div><strong>{{ item.ip }}</strong><span>{{ item.geo }}</span></div>
+                <b>{{ item.hits }} 次</b>
+                <span :class="levelClass(item.level)">{{ item.level }}</span>
+                <em>{{ item.last }}</em>
+                <i><small :style="{ width: item.percent + '%' }"></small></i>
+              </article>
+            </div>
+          </section>
 
-          <div class="behavior-kpi-strip">
-            <article v-for="stat in behaviorStats" :key="stat.label" :data-tone="stat.tone">
-              <div class="kpi-top"><span><AppIcon :name="stat.icon" :label="stat.label" /></span><small>近24小时</small></div>
-              <p>{{ stat.label }}</p><strong>{{ stat.value }}</strong><em>{{ stat.delta }}</em>
-            </article>
-          </div>
+          <section class="panel seven-day-threat-board">
+            <div class="panel-title-row compact"><div><h3>最近 7 天威胁统计趋势</h3><p>总量、高危与自动阻断趋势对比</p></div><span class="tag info">7D</span></div>
+            <div class="seven-day-summary">
+              <article v-for="item in behaviorSevenDaySummary" :key="item.label" :data-tone="item.tone"><span>{{ item.label }}</span><strong>{{ item.value }}</strong><em>{{ item.desc }}</em></article>
+            </div>
+            <div class="seven-day-chart-wrap">
+              <svg class="seven-day-chart" viewBox="0 0 520 156" preserveAspectRatio="none" role="img" aria-label="最近 7 天威胁统计趋势">
+                <line v-for="y in [26, 65, 104, 143]" :key="y" x1="0" :y1="y" x2="520" :y2="y" class="chart-grid-line" />
+                <polyline :points="sparkline(behaviorSevenDayTrend.map((item) => item.total), 520, 156)" class="behavior-trend-line" style="--line-color:#1d4ed8" />
+                <polyline :points="sparkline(behaviorSevenDayTrend.map((item) => item.high), 520, 156)" class="behavior-trend-line" style="--line-color:#dc2626" />
+                <polyline :points="sparkline(behaviorSevenDayTrend.map((item) => item.blocked), 520, 156)" class="behavior-trend-line" style="--line-color:#059669" />
+              </svg>
+              <div class="trend-axis"><span v-for="item in behaviorSevenDayTrend" :key="item.day">{{ item.day }}</span></div>
+            </div>
+            <div class="trend-legend"><span><i style="background:#1d4ed8"></i>威胁总量</span><span><i style="background:#dc2626"></i>高危事件</span><span><i style="background:#059669"></i>自动阻断</span></div>
+          </section>
         </div>
 
         <div class="behavior-analytics-grid">
