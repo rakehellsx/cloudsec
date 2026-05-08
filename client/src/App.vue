@@ -5,7 +5,7 @@
 import { computed, ref } from 'vue';
 import AppIcon from './components/AppIcon.vue';
 
-type PageKey = 'overview' | 'alerts' | 'intelligence' | 'trace' | 'risk' | 'assets' | 'rules' | 'warning';
+type PageKey = 'overview' | 'alerts' | 'behavior' | 'intelligence' | 'trace' | 'risk' | 'assets' | 'rules' | 'warning';
 type Severity = '高危' | '中危' | '低危';
 type AlertStatus = '成功' | '可疑' | '未成功' | '已处理' | '已阻断' | '溯源中';
 type TraceTab = '攻击过程' | '资产行为分析' | '资产关联关系' | '攻击者画像' | '流量包分析';
@@ -40,7 +40,7 @@ const selectedScenario = ref('外部攻击');
 const selectedType = ref('全部类型');
 const selectedLevel = ref('全部等级');
 const selectedStatus = ref('全部状态');
-const alertKeyword = ref('');
+const activeBehaviorLayer = ref('全部');
 const selectedAlertId = ref('AG-1001');
 const selectedRows = ref<string[]>(['AG-1002']);
 const alertDrawerOpen = ref(false);
@@ -72,6 +72,7 @@ const navGroups = [
     title: '威胁分析',
     items: [
       { key: 'alerts' as PageKey, label: '实时告警', icon: 'alerts' },
+      { key: 'behavior' as PageKey, label: '威胁行为检测', icon: 'behavior' },
       { key: 'intelligence' as PageKey, label: '威胁情报', icon: 'intelligence' },
       { key: 'risk' as PageKey, label: '风险定位', icon: 'risk' },
       { key: 'trace' as PageKey, label: '溯源分析', icon: 'trace' },
@@ -88,7 +89,7 @@ const navGroups = [
 ];
 
 const moduleIcons: Record<string, string> = {
-  overview: 'overview', alerts: 'alerts', intelligence: 'intelligence', trace: 'trace', risk: 'risk', assets: 'assets', rules: 'rules', warning: 'warning',
+  overview: 'overview', alerts: 'alerts', behavior: 'behavior', intelligence: 'intelligence', trace: 'trace', risk: 'risk', assets: 'assets', rules: 'rules', warning: 'warning',
   攻击过程: 'process', 资产行为分析: 'behavior', 资产关联关系: 'topology', 攻击者画像: 'profile', 流量包分析: 'packet',
   region: 'region', VPC: 'vpc', 物理机: 'physical', 云主机: 'host', 容器: 'container', 漏洞管理: 'vulnerability', 弱口令: 'password', 两高一弱: 'baseline',
   规则配置: 'config', 规则组配置: 'group', 白名单: 'whitelist', 邮件通知: 'mail', 邮件列表: 'recipients', 邮件服务器配置: 'smtp',
@@ -98,6 +99,7 @@ const moduleIcons: Record<string, string> = {
 const pageMeta: Record<PageKey, { title: string; crumb: string; desc: string }> = {
   overview: { title: '态势概览', crumb: '我的位置 / 态势概览', desc: '云内流量安全态势监测与攻击趋势研判' },
   alerts: { title: '实时告警', crumb: '我的位置 / 威胁分析 / 实时告警', desc: '按威胁场景、攻击类型、等级和状态筛选告警并完成处置' },
+  behavior: { title: '威胁行为检测', crumb: '我的位置 / 威胁分析 / 威胁行为检测', desc: '基于 Falco 风格运行时规则识别容器、主机、网络与敏感数据访问异常' },
   intelligence: { title: '威胁情报', crumb: '我的位置 / 威胁分析 / 威胁情报', desc: '维护 IOC 情报、命中资产与可信度等级' },
   trace: { title: '溯源分析', crumb: '我的位置 / 威胁分析 / 溯源分析', desc: '围绕单个告警还原攻击过程、资产行为、关联关系与流量证据' },
   risk: { title: '风险定位', crumb: '我的位置 / 威胁分析 / 风险定位', desc: '按 VPC、业务系统、云主机、容器和物理机定位风险' },
@@ -124,6 +126,35 @@ const scenarios = [
   { name: '横向移动', count: 3217 },
 ];
 const typeTags = ['违规外联', '暴力破解', 'SQL注入', '信息泄露', '端口扫描', '未授权访问'];
+
+const behaviorStats = [
+  { label: '运行时规则命中', value: '426', delta: '+18.6%', icon: 'behavior', tone: 'blue' },
+  { label: '高危行为事件', value: '37', delta: '+9', icon: 'alerts', tone: 'red' },
+  { label: '受影响工作负载', value: '58', delta: '12 个命名空间', icon: 'container', tone: 'orange' },
+  { label: '敏感文件访问', value: '19', delta: '7 次阻断', icon: 'password', tone: 'green' },
+];
+
+const behaviorCategories = [
+  { title: '容器安全层', icon: 'container', risk: '高危' as Severity, hits: 142, focus: '容器内运行时异常', desc: '检测容器内 shell 会话创建、安装新软件包、从非预期路径启动进程等偏离镜像基线的行为。', vectors: ['容器内 shell 会话创建', '容器内安装新软件包', '从 /tmp、/dev/shm 等非预期位置启动进程'] },
+  { title: '主机安全层', icon: 'host', risk: '高危' as Severity, hits: 96, focus: '宿主机关键目录与权限变更', desc: '监控 /etc、/usr/bin、/usr/sbin 等敏感目录读写，识别文件所有权、访问权限变更和特权容器启动。', vectors: ['敏感目录读写', '文件所有权或权限变更', 'privileged 容器启动'] },
+  { title: '网络威胁层', icon: 'network', risk: '中危' as Severity, hits: 121, focus: '异常监听与未授权外联', desc: '发现意外端口监听、异常出站连接和未经批准的外部通信，辅助判断数据泄露与横向移动风险。', vectors: ['意外端口监听', '异常出站网络连接', '未经批准的外部通信'] },
+  { title: '敏感数据保护', icon: 'password', risk: '高危' as Severity, hits: 67, focus: '凭证与身份文件访问', desc: '持续监控 /etc/shadow、/etc/passwd、SSH 密钥、API 凭证等高价值敏感文件访问。', vectors: ['/etc/shadow 与 /etc/passwd 访问', 'SSH 私钥读取', 'API Token 与云凭证访问'] },
+];
+
+const behaviorEvents = [
+  { id: 'FB-9001', time: '2026-05-08 10:24:18', layer: '容器安全', vector: '容器内 shell 会话创建', asset: 'namespace/pay-prod · pod/pay-api-6d79', rule: 'Falco: Terminal shell in container', level: '高危' as Severity, evidence: 'proc.name=bash user=root container.image=pay-api:v2.7 command=bash -i', action: '已隔离 Pod 并保留容器快照' },
+  { id: 'FB-9002', time: '2026-05-08 10:21:06', layer: '容器安全', vector: '容器内安装新软件包', asset: 'namespace/data-prod · pod/etl-worker-0', rule: 'Falco: Package management launched in container', level: '中危' as Severity, evidence: 'proc.name=apt-get evt.type=execve user=app path=/usr/bin/apt-get', action: '已触发镜像漂移复核' },
+  { id: 'FB-9003', time: '2026-05-08 10:17:45', layer: '主机安全', vector: '敏感目录写入', asset: 'node-cn-bj-ecs-03', rule: 'Falco: Write below binary dir', level: '高危' as Severity, evidence: 'fd.name=/usr/bin/.cache/kswapd proc.name=sh user=root', action: '已收敛节点污点并发起 EDR 扫描' },
+  { id: 'FB-9004', time: '2026-05-08 10:13:52', layer: '网络威胁', vector: '意外端口监听', asset: 'namespace/ops · pod/debug-toolbox', rule: 'Falco: Unexpected listening port', level: '中危' as Severity, evidence: 'fd.sport=4444 proc.name=nc container.id=8f42d1', action: '已阻断安全组入站并通知负责人' },
+  { id: 'FB-9005', time: '2026-05-08 10:09:39', layer: '敏感数据保护', vector: 'SSH 私钥读取', asset: 'node-cn-tj-host-11', rule: 'Falco: Read sensitive file trusted after startup', level: '高危' as Severity, evidence: 'fd.name=/root/.ssh/id_rsa proc.name=python3 user=root', action: '已冻结访问令牌并生成凭证轮换工单' },
+];
+
+const behaviorRules = [
+  { rule: 'Terminal shell in container', layer: '容器安全', severity: '高危' as Severity, condition: 'container.id exists and proc.name in (bash, sh, zsh)', scope: '生产命名空间', status: '阻断+告警' },
+  { rule: 'Write below etc or binary dir', layer: '主机安全', severity: '高危' as Severity, condition: 'fd.directory in (/etc, /usr/bin, /usr/sbin) and evt.type in (open_write, chmod, chown)', scope: '全部宿主机', status: '告警+快照' },
+  { rule: 'Unexpected outbound connection', layer: '网络威胁', severity: '中危' as Severity, condition: 'not fd.sip in approved_cidrs and fd.type=ipv4', scope: '出口网关与 Pod', status: '告警+联动防火墙' },
+  { rule: 'Read sensitive credential file', layer: '敏感数据', severity: '高危' as Severity, condition: 'fd.name in (/etc/shadow, /etc/passwd, ~/.ssh/*, /var/run/secrets/*)', scope: '节点与容器', status: '阻断+凭证轮换' },
+];
 
 const alerts = ref([
   { id: 'AG-1001', sourceIp: '192.168.123.112:50166', sourceGeo: '江苏-南京', targetIp: '192.168.123.113:58000', targetAsset: '数据模型工具应用生产-ECS02', business: '数字化作业部', attackType: '系统命令执行', rule: '1806', level: '高危' as Severity, status: '成功' as AlertStatus, detail: '/rest/v1/messages?select=agents.agent_id(name)&thread_id=eq.19833769', time: '2025-11-31 16:01:01', scene: '外部攻击', confidence: 98 },
@@ -229,6 +260,8 @@ const filteredAlerts = computed(() => alerts.value.filter((item) => {
   const matchKeyword = !keyword || `${item.sourceIp} ${item.targetIp} ${item.targetAsset} ${item.detail} ${item.attackType}`.toLowerCase().includes(keyword);
   return matchScenario && matchType && matchLevel && matchStatus && matchKeyword;
 }));
+const filteredBehaviorEvents = computed(() => behaviorEvents.filter((item) => activeBehaviorLayer.value === '全部' || item.layer === activeBehaviorLayer.value));
+
 const filteredIntelligence = computed(() => intelligence.value.filter((item) => {
   const keyword = intelligenceQuery.value.trim().toLowerCase();
   const matchHit = !onlyHit.value || item.hit;
@@ -274,6 +307,7 @@ function refreshPage() {
   const actionMap: Record<PageKey, string> = {
     overview: '已刷新态势指标、攻击趋势与实时告警监测数据',
     alerts: '已刷新告警队列并重新计算当前筛选结果',
+    behavior: '已刷新 Falco 运行时事件、攻击向量与敏感文件访问证据',
     intelligence: '已同步威胁情报命中状态',
     trace: '已刷新当前告警的溯源证据链',
     risk: '已重新计算风险定位维度与风险分',
@@ -615,6 +649,55 @@ function testSmtp() {
         <div class="table-card">
           <table class="data-table"><thead><tr><th><input type="checkbox" :checked="allAlertSelected" @change="toggleAllAlerts" /></th><th>序号</th><th>源IP</th><th>目的IP</th><th>攻击类型</th><th>攻击状态</th><th>详细参数</th><th>告警时间</th><th>操作</th></tr></thead><tbody><tr v-for="(item, index) in filteredAlerts" :key="item.id"><td><input type="checkbox" :checked="selectedRows.includes(item.id)" @change="toggleRow(item.id)" /></td><td>{{ index + 1 }}</td><td><strong>{{ item.sourceIp }}</strong><small>{{ item.sourceGeo }}</small></td><td><strong>{{ item.targetIp }}</strong><small>{{ item.targetAsset }}</small></td><td><span :class="levelClass(item.level)">{{ item.attackType }} [{{ item.rule }}]</span></td><td><span :class="statusClass(item.status)">{{ item.level }} / {{ item.status }}</span></td><td class="param">{{ item.detail }}</td><td>{{ item.time }}</td><td class="ops"><button @click="openAlert(item.id)">详情</button><button @click="goTrace(item.id)">溯源分析</button><button @click="handleAlertAction(item.id, '标记误报')">标记误报</button><button @click="moreMenuId = moreMenuId === item.id ? '' : item.id">更多</button><div v-if="moreMenuId === item.id" class="more-menu"><button @click="handleAlertAction(item.id, '标记误报')">标记误报</button><button @click="handleAlertAction(item.id, '加白')">加白</button><button @click="handleAlertAction(item.id, '加资产')">加资产</button><button @click="openAddIntelligence(item.sourceIp)">加情报</button><button @click="handleAlertAction(item.id, '标记已处理')">标记已处理</button><button @click="handleAlertAction(item.id, '封禁')">封禁</button><button @click="handleAlertAction(item.id, '阻断隔离')">阻断隔离</button></div></td></tr></tbody></table>
           <div class="pagination"><span>共5000条</span><div><button>上一页</button><b>1</b><b class="active">2</b><b>3</b><span>...</span><b>10</b><button>下一页</button><span>到第</span><input value="1" /><span>页</span></div></div>
+        </div>
+      </section>
+
+<section v-if="activePage === 'behavior'" class="page-stack threat-behavior-page">
+        <div class="behavior-hero panel">
+          <div>
+            <p class="eyebrow">Falco Runtime Threat Detection</p>
+            <h3>威胁行为检测工作台</h3>
+            <p>在流量监测之外，补充对云原生运行时行为的持续检测，形成“容器—主机—网络—敏感数据”的多层攻击向量识别能力。</p>
+          </div>
+          <div class="behavior-summary">
+            <span>检测引擎</span><strong>Falco 风格规则</strong><small>Syscall / K8s Audit / Network Context</small>
+          </div>
+        </div>
+
+        <div class="behavior-stat-grid">
+          <article v-for="stat in behaviorStats" :key="stat.label" :data-tone="stat.tone">
+            <span><AppIcon :name="stat.icon" :label="stat.label" /></span>
+            <div><p>{{ stat.label }}</p><strong>{{ stat.value }}</strong><em>{{ stat.delta }}</em></div>
+          </article>
+        </div>
+
+        <div class="behavior-category-grid">
+          <article v-for="category in behaviorCategories" :key="category.title" class="behavior-category panel">
+            <div class="category-head">
+              <span><AppIcon :name="category.icon" :label="category.title" /></span>
+              <div><h3>{{ category.title }}</h3><p>{{ category.focus }}</p></div>
+              <b :class="levelClass(category.risk)">{{ category.risk }}</b>
+            </div>
+            <p class="category-desc">{{ category.desc }}</p>
+            <div class="vector-list"><button v-for="vector in category.vectors" :key="vector" @click="showToast('已按攻击向量联动筛选：' + vector)">{{ vector }}</button></div>
+            <div class="category-foot"><span>近 24h 命中</span><strong>{{ category.hits }}</strong></div>
+          </article>
+        </div>
+
+        <div class="behavior-main-grid">
+          <section class="table-card behavior-event-card">
+            <div class="table-toolbar behavior-toolbar"><div><button class="blue-button" @click="showToast('已下发威胁行为检测规则同步任务')">同步规则</button><button class="white-button" @click="showToast('已导出威胁行为事件证据包')">导出证据</button></div><div class="behavior-layer-tabs"><button v-for="layer in ['全部', '容器安全', '主机安全', '网络威胁', '敏感数据保护']" :key="layer" class="mini" :class="{ active: activeBehaviorLayer === layer }" @click="activeBehaviorLayer = layer">{{ layer }}</button></div><span class="hint-inline">按运行时证据、资产对象和处置动作串联审计闭环</span></div>
+            <table class="data-table behavior-table"><thead><tr><th>事件ID</th><th>时间</th><th>检测层面</th><th>攻击向量</th><th>资产对象</th><th>规则</th><th>等级</th><th>关键证据</th><th>处置状态</th></tr></thead><tbody><tr v-for="event in filteredBehaviorEvents" :key="event.id"><td><strong>{{ event.id }}</strong></td><td>{{ event.time }}</td><td>{{ event.layer }}</td><td>{{ event.vector }}</td><td>{{ event.asset }}</td><td>{{ event.rule }}</td><td><span :class="levelClass(event.level)">{{ event.level }}</span></td><td class="param code-evidence">{{ event.evidence }}</td><td>{{ event.action }}</td></tr></tbody></table>
+          </section>
+
+          <aside class="panel behavior-rule-panel">
+            <div class="panel-title"><h3>检测规则覆盖</h3><button @click="setPage('rules')">进入规则管理</button></div>
+            <div v-for="rule in behaviorRules" :key="rule.rule" class="behavior-rule-row">
+              <div><b>{{ rule.rule }}</b><span>{{ rule.layer }} · {{ rule.scope }}</span></div>
+              <p>{{ rule.condition }}</p>
+              <footer><span :class="levelClass(rule.severity)">{{ rule.severity }}</span><em>{{ rule.status }}</em></footer>
+            </div>
+          </aside>
         </div>
       </section>
 

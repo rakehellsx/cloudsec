@@ -1799,3 +1799,322 @@ input[type="checkbox"]:not(:disabled) {
     flex-direction: column;
   }
 }
+
+
+/* 威胁行为检测模块：延续 Neo-Enterprise Minimalism，强调容器、主机、网络、敏感数据四层运行时证据闭环。 */
+.threat-behavior-page {
+  gap: 16px;
+}
+
+.behavior-hero {
+  min-height: 146px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  overflow: hidden;
+  position: relative;
+  border-color: #cfe2f6;
+  background:
+    radial-gradient(circle at 86% 18%, rgba(32, 185, 233, 0.18), transparent 24%),
+    linear-gradient(135deg, #ffffff 0%, #f5faff 52%, #eef7ff 100%);
+}
+
+.behavior-hero::after {
+  content: "";
+  position: absolute;
+  right: -64px;
+  bottom: -92px;
+  width: 280px;
+  height: 280px;
+  border: 1px solid rgba(31, 122, 224, 0.12);
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 24px rgba(32, 185, 233, 0.05), inset 0 0 0 58px rgba(31, 122, 224, 0.05);
+}
+
+.eyebrow {
+  margin: 0 0 8px;
+  color: #1f7ae0;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.behavior-hero h3 {
+  margin: 0;
+  color: #123a63;
+  font-size: 24px;
+}
+
+.behavior-hero p {
+  max-width: 680px;
+  margin: 9px 0 0;
+  color: #5f7489;
+  line-height: 1.7;
+}
+
+.behavior-summary {
+  position: relative;
+  z-index: 1;
+  min-width: 230px;
+  padding: 16px;
+  border: 1px solid rgba(31, 122, 224, 0.18);
+  background: rgba(255,255,255,0.82);
+  box-shadow: 0 14px 30px rgba(31, 122, 224, 0.10);
+}
+
+.behavior-summary span,
+.behavior-summary small,
+.category-foot span,
+.hint-inline {
+  color: #6f8499;
+  font-size: 12px;
+}
+
+.behavior-summary strong {
+  display: block;
+  margin: 5px 0;
+  color: #123a63;
+  font-size: 18px;
+}
+
+.behavior-stat-grid,
+.behavior-category-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.behavior-stat-grid article {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  min-height: 92px;
+  padding: 15px;
+  background: #fff;
+  border: 1px solid var(--line);
+  box-shadow: 0 8px 22px rgba(36, 74, 119, 0.06);
+  position: relative;
+  overflow: hidden;
+}
+
+.behavior-stat-grid article::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  height: 3px;
+  background: var(--blue);
+}
+
+.behavior-stat-grid article[data-tone="red"]::after { background: var(--red); }
+.behavior-stat-grid article[data-tone="orange"]::after { background: var(--amber); }
+.behavior-stat-grid article[data-tone="green"]::after { background: var(--green); }
+
+.behavior-stat-grid article > span,
+.category-head > span {
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--blue);
+  background: linear-gradient(135deg, #eef7ff, #e3fbff);
+  box-shadow: inset 0 0 0 1px rgba(31, 122, 224, 0.14);
+}
+
+.behavior-stat-grid p {
+  margin: 0 0 4px;
+  color: #64798e;
+  font-size: 12px;
+}
+
+.behavior-stat-grid strong {
+  display: block;
+  color: #163a62;
+  font-size: 24px;
+}
+
+.behavior-stat-grid em {
+  color: #1f7ae0;
+  font-style: normal;
+  font-size: 12px;
+}
+
+.behavior-category {
+  display: flex;
+  flex-direction: column;
+  min-height: 245px;
+}
+
+.category-head {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.category-head h3 {
+  margin: 0;
+  color: #183a63;
+  font-size: 15px;
+}
+
+.category-head p,
+.category-desc {
+  margin: 4px 0 0;
+  color: #687e94;
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.category-desc {
+  margin-top: 12px;
+}
+
+.vector-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 14px 0;
+}
+
+.vector-list button {
+  border: 1px solid #d6e5f4;
+  background: #f7fbff;
+  color: #315d87;
+  padding: 6px 9px;
+  border-radius: 2px;
+  font-size: 12px;
+}
+
+.vector-list button:hover {
+  color: #fff;
+  border-color: #1f7ae0;
+  background: #1f7ae0;
+}
+
+.category-foot {
+  margin-top: auto;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  border-top: 1px solid #edf3f8;
+  padding-top: 10px;
+}
+
+.category-foot strong {
+  color: #163a62;
+  font-size: 22px;
+}
+
+.behavior-main-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(330px, .75fr);
+  gap: 14px;
+}
+
+.behavior-event-card {
+  overflow: hidden;
+}
+
+.behavior-table .code-evidence {
+  font-family: "SFMono-Regular", Consolas, monospace;
+  color: #173a62;
+  max-width: 280px;
+}
+
+.behavior-rule-panel {
+  display: grid;
+  gap: 11px;
+  align-content: start;
+}
+
+.behavior-rule-row {
+  padding: 12px;
+  border: 1px solid #e2ecf6;
+  background: #f9fcff;
+}
+
+.behavior-rule-row b,
+.behavior-rule-row span,
+.behavior-rule-row em {
+  display: block;
+}
+
+.behavior-rule-row b {
+  color: #173a62;
+  font-size: 13px;
+}
+
+.behavior-rule-row span {
+  margin-top: 4px;
+  color: #6f8499;
+  font-size: 12px;
+}
+
+.behavior-rule-row p {
+  margin: 10px 0;
+  color: #526a83;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.behavior-rule-row footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.behavior-rule-row em {
+  color: #1f7ae0;
+  font-size: 12px;
+  font-style: normal;
+}
+
+@media (max-width: 1320px) {
+  .behavior-stat-grid,
+  .behavior-category-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .behavior-main-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 900px) {
+  .behavior-hero {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .behavior-stat-grid,
+  .behavior-category-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+/* 威胁行为检测交互增强：层面筛选保持轻量按钮形态，避免破坏现有高密表格操作区。 */
+.behavior-toolbar {
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.behavior-layer-tabs {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.behavior-layer-tabs .mini.active {
+  background: #1f7ae0;
+  color: #fff;
+  border-color: #1f7ae0;
+  box-shadow: 0 8px 16px rgba(31,122,224,0.13);
+}
